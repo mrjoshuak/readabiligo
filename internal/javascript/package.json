@@ -1,0 +1,12 @@
+{
+  "name": "readabiligo-js",
+  "version": "1.0.0",
+  "description": "JavaScript components for ReadabiliGo",
+  "main": "ExtractArticle.js",
+  "dependencies": {
+    "@mozilla/readability": "^0.4.4",
+    "jsdom": "^22.1.0",
+    "minimist": "^1.2.8"
+  },
+  "private": true
+}
