@@ -152,22 +152,23 @@ func TestStripHTMLWhitespace(t *testing.T) {
 func TestIsControlCategory(t *testing.T) {
 	tests := []struct {
 		name string
+		r    rune
 		cat  string
 		want bool
 	}{
-		{"Cc", "Cc", true},
-		{"Cf", "Cf", true},
-		{"Cn", "Cn", true},
-		{"Co", "Co", true},
-		{"Cs", "Cs", true},
-		{"Lu", "Lu", false}, // Uppercase letter
-		{"Ll", "Ll", false}, // Lowercase letter
+		{"Cc", 0x00, "Cc", true},
+		{"Cf", 0x061C, "Cf", true},
+		{"Cn", 0x10FFFF, "Cn", true},
+		{"Co", 0xE000, "Co", true},
+		{"Cs", 0xD800, "Cs", true},
+		{"Lu", 'A', "Lu", false}, // Uppercase letter
+		{"Ll", 'a', "Ll", false}, // Lowercase letter
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := IsControlCategory(tt.cat); got != tt.want {
-				t.Errorf("IsControlCategory(%q) = %v, want %v", tt.cat, got, tt.want)
+			if got := IsControlCategory(tt.r, tt.cat); got != tt.want {
+				t.Errorf("IsControlCategory(%q, %q) = %v, want %v", tt.r, tt.cat, got, tt.want)
 			}
 		})
 	}

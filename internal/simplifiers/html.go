@@ -381,11 +381,25 @@ func stripAttributes(doc *goquery.Document) {
 
 // removeBlacklist removes all blacklisted elements
 func removeBlacklist(doc *goquery.Document) {
+	// Remove elements from the standard blacklist
 	for _, elementName := range ElementsToDelete() {
 		doc.Find(elementName).Each(func(_ int, s *goquery.Selection) {
 			s.Remove()
 		})
 	}
+
+	// Remove common non-content elements
+	doc.Find("nav, header, footer, aside, .sidebar, .navigation, .menu, .ad, .advertisement").Remove()
+
+	// Remove elements with common non-content class/ID patterns
+	doc.Find("[class*='nav'], [class*='menu'], [class*='sidebar'], [class*='footer'], [class*='header'], [id*='nav'], [id*='menu'], [id*='sidebar'], [id*='footer'], [id*='header']").Remove()
+
+	// Remove elements with high link density
+	doc.Find("*").Each(func(i int, s *goquery.Selection) {
+		if CalculateLinkDensity(s) > 0.5 {
+			s.Remove()
+		}
+	})
 }
 
 // unwrapElements replaces elements with their contents
