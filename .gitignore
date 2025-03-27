@@ -19,6 +19,8 @@ go.work
 
 # Binary output directory
 bin/
+# Main executable
+readabiligo
 
 # IDE specific files
 .idea/
