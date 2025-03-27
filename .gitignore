@@ -37,6 +37,7 @@ node_modules/
 
 # Temporary files
 *.tmp
+*.prof
 
 # Real-world test data and test files from ReadabiliPy (may contain copyrighted content)
 test/data/real_world/
