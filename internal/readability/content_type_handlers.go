@@ -61,6 +61,23 @@ func (r *Readability) adjustForContentType() {
 		if r.options.Debug {
 			fmt.Printf("DEBUG: Using minimal content extraction settings (focus on core content)\n")
 		}
+		
+	case ContentTypePaywall:
+		// For paywall content, extract all available content and ignore the paywall
+		r.flags = r.flags & ^FlagCleanConditionally // Disable conditional cleaning for max content
+		r.flags = r.flags | FlagStripUnlikelys | FlagWeightClasses // Still strip unlikely elements
+		r.options.PreserveImportantLinks = true // Keep important links that might bypass the paywall
+		r.options.CharThreshold = r.options.CharThreshold / 4 // Very low threshold to extract everything
+		
+		// Preserve premium content markers
+		r.options.ClassesToPreserve = append(
+			r.options.ClassesToPreserve,
+			"premium-content", "paid-content", "subscriber-content",
+		)
+		
+		if r.options.Debug {
+			fmt.Printf("DEBUG: Using paywall content extraction settings (maximum content extraction)\n")
+		}
 
 	case ContentTypeArticle:
 		// Standard article extraction (default) - balanced approach
@@ -184,6 +201,15 @@ func (r *Readability) applyContentTypeCleanup(article *goquery.Selection) {
 		
 		// Apply strict cleaning to minimal pages
 		cleanupMinimalPage(article)
+		
+	case ContentTypePaywall:
+		// For paywall content, apply special handling to extract everything
+		if r.options.Debug {
+			fmt.Printf("DEBUG: Applying paywall content cleanup rules (premium content extraction)\n")
+		}
+		
+		// Apply paywall-specific cleanup
+		cleanupPaywallContent(article)
 
 	case ContentTypeArticle:
 		// Standard article cleanup - balanced approach
@@ -542,6 +568,98 @@ func performGeneralMinimalPageCleanup(article *goquery.Selection) {
 			}
 		})
 	}
+}
+
+// cleanupPaywallContent performs specialized cleanup for paywall content
+func cleanupPaywallContent(article *goquery.Selection) {
+	// First, identify all paywall elements to be removed or bypassed
+	paywallSelectors := []string{
+		".paywall", "#paywall", ".paywall-container", "#paywall-container",
+		".subscription-required", ".subscription-wall", ".meter-paywall",
+		".metered-content", ".paid-content-container", ".paid-overlay",
+		".subscriber-only", ".subscriber-overlay", ".reg-gate", ".registration-gate",
+		".article-gate", ".content-gate", ".gated-content", ".article-paywall",
+		".dynamic-paywall", ".reader-paywall", ".paid-content-gate",
+	}
+	
+	// Remove the paywall container entirely to reveal the content beneath
+	for _, selector := range paywallSelectors {
+		article.Find(selector).Remove()
+	}
+	
+	// Remove any blur effects or opacity filters that might be hiding content
+	article.Find("[style*='blur'], [style*='opacity'], .blurred, .blur-content, .dimmed, .fade-out").Each(func(_ int, s *goquery.Selection) {
+		// Replace the style with normal visibility
+		s.RemoveAttr("style")
+		s.RemoveClass("blurred blur-content dimmed fade-out")
+		s.AddClass("readability-preserve")
+	})
+	
+	// Preserve all paragraphs that might be part of the premium content
+	article.Find(".premium-content, .paid-content, .premium, .subscriber-content, .subscribers-only").Each(func(_ int, s *goquery.Selection) {
+		// Make these elements visible and preserve them
+		s.RemoveAttr("style") // Remove any hiding styles
+		s.AddClass("readability-preserve")
+		
+		// Find all nested paragraphs and make sure they're preserved
+		s.Find("p, h1, h2, h3, h4, h5, h6, blockquote, ul, ol, li").Each(func(_ int, content *goquery.Selection) {
+			content.AddClass("readability-preserve")
+		})
+	})
+	
+	// Look for any hidden premium content and make it visible
+	article.Find("p[class*='premium'], p[class*='paid'], div[class*='premium'], div[class*='paid']").Each(func(_ int, s *goquery.Selection) {
+		s.RemoveAttr("style")
+		s.AddClass("readability-preserve")
+	})
+	
+	// Remove subscription CTA elements that get in the way of content
+	subscriptionCTASelectors := []string{
+		".subscribe-button", ".subscription-button", ".subscribe-now",
+		".subscription-prompt", ".subscription-message", ".subscribe-overlay",
+		".subscription-offer", ".paywall-prompt", ".login-prompt",
+		".subscribe-cta", ".subscriber-cta", ".subscription-callout",
+	}
+	
+	for _, selector := range subscriptionCTASelectors {
+		article.Find(selector).Remove()
+	}
+	
+	// Remove any content blockers or overlays
+	article.Find(".content-blocker, .content-overlay, .article-overlay, .article-blur, .content-fade").Remove()
+	
+	// Preserve any headings that might be part of the premium content
+	article.Find("h1, h2, h3, h4, h5, h6").AddClass("readability-preserve")
+	
+	// Preserve all paragraphs in the article body
+	article.Find("article p, .article-body p, .article-content p, .story p, .story-body p").AddClass("readability-preserve")
+	
+	// Remove any modal or dialog elements that could be used for paywall prompts
+	article.Find(".modal, .dialog, .popup, .notification-modal").Remove()
+	
+	// Remove any elements with inline styles that might hide content
+	article.Find("[style*='display: none'], [style*='visibility: hidden']").Each(func(_ int, s *goquery.Selection) {
+		// Only if it appears to be content, not navigation
+		if s.Find("p, h1, h2, h3, blockquote").Length() > 0 {
+			s.RemoveAttr("style")
+			s.AddClass("readability-preserve")
+		}
+	})
+	
+	// Remove any "login to read more" messages
+	article.Find(".login-message, .login-prompt, .continue-reading-prompt").Remove()
+	
+	// Look for classes that might indicate premium article content and preserve them
+	article.Find("[class*='article-'], [class*='content-'], [class*='story-']").Each(func(_ int, s *goquery.Selection) {
+		if s.Find("p, h1, h2, h3, blockquote, ul, ol").Length() > 0 {
+			s.AddClass("readability-preserve")
+		}
+	})
+	
+	// Clean up standard elements unrelated to the main content
+	article.Find(".share, .sharing, .social, .comments, .comment-section").Remove()
+	article.Find(".related-articles, .read-more, .more-articles, .trending").Remove()
+	article.Find(".ad, .advertisement, .ad-unit, .banner").Remove()
 }
 
 // removeNonEssentialElements performs final cleanup for minimal pages

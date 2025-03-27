@@ -35,6 +35,7 @@ const (
 	ContentTypeTechnical  // Code examples, tech blogs
 	ContentTypeError      // Error pages, 404s
 	ContentTypeMinimal    // Login pages, etc.
+	ContentTypePaywall    // Paywalled content
 )
 
 // String returns a string representation of the content type
@@ -50,6 +51,8 @@ func (ct ContentType) String() string {
 		return "Error"
 	case ContentTypeMinimal:
 		return "Minimal"
+	case ContentTypePaywall:
+		return "Paywall"
 	default:
 		return "Unknown"
 	}

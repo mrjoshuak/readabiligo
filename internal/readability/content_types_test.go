@@ -134,6 +134,95 @@ func TestDetectContentType(t *testing.T) {
 			`,
 			expected: ContentTypeMinimal,
 		},
+		{
+			name: "Paywall Content With Subscription Container",
+			html: `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Premium Article</title>
+				</head>
+				<body>
+					<article>
+						<h1>Premium Content Article</h1>
+						<div class="byline">By Premium Writer - January 1, 2023</div>
+						<p>This is the introduction to a premium article.</p>
+						<p>Here's a bit more content that's visible to everyone.</p>
+						<div class="paywall">
+							<h2>Continue Reading</h2>
+							<p>You've reached your free article limit this month.</p>
+							<a href="/subscribe" class="subscribe-button">Subscribe Now</a>
+						</div>
+						<div class="premium-content">
+							<p>This is the premium content hidden behind the paywall.</p>
+							<p>More detailed analysis and information for subscribers only.</p>
+							<h2>Exclusive Insights</h2>
+							<p>Special content for our paying subscribers.</p>
+						</div>
+					</article>
+				</body>
+				</html>
+			`,
+			expected: ContentTypePaywall,
+		},
+		{
+			name: "Paywall Content With Metered Message",
+			html: `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Metered Paywall Article</title>
+				</head>
+				<body>
+					<article>
+						<h1>Important News Analysis</h1>
+						<div class="byline">By Staff Reporter - January 1, 2023</div>
+						<p>This is the first paragraph of a metered article.</p>
+						<p>You can read a few more paragraphs before hitting the limit.</p>
+						<div class="article-body">
+							<p>Third paragraph with more context about the story.</p>
+							<div class="metered-message">
+								<p>You have read 3 of your 5 free articles this month.</p>
+								<a href="/subscribe">Subscribe for unlimited access</a>
+							</div>
+						</div>
+					</article>
+				</body>
+				</html>
+			`,
+			expected: ContentTypePaywall,
+		},
+		{
+			name: "Paywall Content With Hidden Premium Elements",
+			html: `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Hidden Content Article</title>
+				</head>
+				<body>
+					<article>
+						<h1>Investigation Report</h1>
+						<div class="byline">By Investigative Team - January 1, 2023</div>
+						<p>This is the introduction to our investigation.</p>
+						<p>Here are some initial findings that are available to all readers.</p>
+						<p class="fade-out">This paragraph is partially visible but fades out.</p>
+						<div style="display: none;" class="paid-content">
+							<h2>Detailed Analysis</h2>
+							<p>This hidden section contains our detailed analysis.</p>
+							<p>This is only available to subscribers.</p>
+						</div>
+						<div class="subscription-prompt">
+							<p>Sign in to continue reading</p>
+							<a href="/login" class="login-link">Already a subscriber? Log in</a>
+							<a href="/subscribe" class="subscribe-cta">Subscribe now</a>
+						</div>
+					</article>
+				</body>
+				</html>
+			`,
+			expected: ContentTypePaywall,
+		},
 	}
 
 	for _, tt := range tests {
@@ -157,6 +246,7 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 		html             string
 		forceContentType ContentType
 		detectEnabled    bool
+		expectedElements map[string]int // Map of selector to expected count
 	}{
 		{
 			name: "Error Page With Detection",
@@ -180,6 +270,11 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 				</html>
 			`,
 			detectEnabled: true,
+			expectedElements: map[string]int{
+				"nav": 0, // Error page handling should remove nav
+				"a":   1, // Only homepage link should remain
+				"p":   1, // Error message should remain
+			},
 		},
 		{
 			name: "Error Page With Forced Type",
@@ -204,6 +299,127 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 			`,
 			forceContentType: ContentTypeError,
 			detectEnabled:    false,
+			expectedElements: map[string]int{
+				"nav": 0, // Error page handling should remove nav
+				"a":   1, // Only homepage link should remain
+				"p":   1, // Error message should remain
+			},
+		},
+		{
+			name: "Paywall Content With Detection",
+			html: `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Premium Article</title>
+				</head>
+				<body>
+					<article>
+						<h1>Premium Content Article</h1>
+						<div class="byline">By Premium Writer - January 1, 2023</div>
+						<p>This is the introduction to a premium article.</p>
+						<p>Here's a bit more content that's visible to everyone.</p>
+						<div class="paywall">
+							<h2>Continue Reading</h2>
+							<p>You've reached your free article limit this month.</p>
+							<a href="/subscribe" class="subscribe-button">Subscribe Now</a>
+						</div>
+						<div class="premium-content">
+							<p>This is the premium content hidden behind the paywall.</p>
+							<p>More detailed analysis and information for subscribers only.</p>
+							<h2>Exclusive Insights</h2>
+							<p>Special content for our paying subscribers.</p>
+						</div>
+					</article>
+				</body>
+				</html>
+			`,
+			detectEnabled: true,
+			expectedElements: map[string]int{
+				".paywall":         0, // Paywall container should be removed
+				".subscribe-button": 0, // Subscribe button should be removed
+				".premium-content": 1, // Premium content should be preserved
+				"h2":              2, // Both headings should be preserved (one in paywall, one in premium content)
+				"p":               5, // All paragraphs should be preserved (including those in premium content)
+			},
+		},
+		{
+			name: "Paywall Content With Forced Type",
+			html: `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Premium Article</title>
+				</head>
+				<body>
+					<article>
+						<h1>Premium Content Article</h1>
+						<div class="byline">By Premium Writer - January 1, 2023</div>
+						<p>This is the introduction to a premium article.</p>
+						<p>Here's a bit more content that's visible to everyone.</p>
+						<div class="paywall">
+							<h2>Continue Reading</h2>
+							<p>You've reached your free article limit this month.</p>
+							<a href="/subscribe" class="subscribe-button">Subscribe Now</a>
+						</div>
+						<div class="premium-content">
+							<p>This is the premium content hidden behind the paywall.</p>
+							<p>More detailed analysis and information for subscribers only.</p>
+							<h2>Exclusive Insights</h2>
+							<p>Special content for our paying subscribers.</p>
+						</div>
+					</article>
+				</body>
+				</html>
+			`,
+			forceContentType: ContentTypePaywall,
+			detectEnabled:    false,
+			expectedElements: map[string]int{
+				".paywall":         0, // Paywall container should be removed
+				".subscribe-button": 0, // Subscribe button should be removed
+				".premium-content": 1, // Premium content should be preserved
+				"h2":              2, // Both headings should be preserved
+				"p":               5, // All paragraphs should be preserved
+			},
+		},
+		{
+			name: "Paywall With Hidden Content",
+			html: `
+				<!DOCTYPE html>
+				<html>
+				<head>
+					<title>Hidden Content Article</title>
+				</head>
+				<body>
+					<article>
+						<h1>Investigation Report</h1>
+						<div class="byline">By Investigative Team - January 1, 2023</div>
+						<p>This is the introduction to our investigation.</p>
+						<p>Here are some initial findings that are available to all readers.</p>
+						<p class="fade-out">This paragraph is partially visible but fades out.</p>
+						<div style="display: none;" class="paid-content">
+							<h2>Detailed Analysis</h2>
+							<p>This hidden section contains our detailed analysis.</p>
+							<p>This is only available to subscribers.</p>
+						</div>
+						<div class="subscription-prompt">
+							<p>Sign in to continue reading</p>
+							<a href="/login" class="login-link">Already a subscriber? Log in</a>
+							<a href="/subscribe" class="subscribe-cta">Subscribe now</a>
+						</div>
+					</article>
+				</body>
+				</html>
+			`,
+			detectEnabled: true,
+			expectedElements: map[string]int{
+				".subscription-prompt": 0, // Subscription prompt should be removed
+				".fade-out":           1, // Faded content should have style removed and be preserved
+				".paid-content":       1, // Hidden content should be made visible and preserved
+				"a[href='/subscribe']": 0, // Subscribe links should be removed
+				"h2":                  1, // Hidden heading should be preserved
+				"p":                   5, // All paragraphs should be preserved
+			},
 		},
 	}
 
@@ -220,13 +436,39 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 				t.Fatalf("Error parsing HTML: %v", err)
 			}
 
-			// Just verify the article was extracted and the content type is set
+			// Verify the article was extracted and the content type is set
 			if article == nil {
 				t.Fatal("Expected article to be extracted, got nil")
 			}
 
 			if !tt.detectEnabled && article.ContentType != tt.forceContentType {
 				t.Errorf("Expected content type %s, got %s", tt.forceContentType, article.ContentType)
+			}
+
+			// If we have expected elements, verify them in the generated content
+			if tt.expectedElements != nil && len(tt.expectedElements) > 0 {
+				// Parse the extracted content to verify element counts
+				doc, err := goquery.NewDocumentFromReader(strings.NewReader(article.Content))
+				if err != nil {
+					t.Fatalf("Error parsing extracted content: %v", err)
+				}
+
+				// Log the detected content type
+				t.Logf("Detected content type: %s", article.ContentType.String())
+
+				// Check each expected element
+				for selector, expectedCount := range tt.expectedElements {
+					actualCount := doc.Find(selector).Length()
+					t.Logf("Element '%s' - Expected: %d, Actual: %d", selector, expectedCount, actualCount)
+					
+					if actualCount != expectedCount {
+						t.Errorf("Expected %d elements matching '%s', got %d", expectedCount, selector, actualCount)
+					}
+				}
+
+				// Log content length as additional info
+				contentText := doc.Text()
+				t.Logf("Extracted content length: %d characters", len(contentText))
 			}
 		})
 	}

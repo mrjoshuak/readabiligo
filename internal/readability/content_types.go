@@ -21,6 +21,7 @@ const (
 	ContentTypeTechnical  // Code examples, tech blogs
 	ContentTypeError      // Error pages, 404s
 	ContentTypeMinimal    // Login pages, etc.
+	ContentTypePaywall    // Paywalled content
 )
 
 // String returns a string representation of the content type
@@ -36,6 +37,8 @@ func (ct ContentType) String() string {
 		return "Error"
 	case ContentTypeMinimal:
 		return "Minimal"
+	case ContentTypePaywall:
+		return "Paywall"
 	default:
 		return "Unknown"
 	}
@@ -46,6 +49,11 @@ func DetectContentType(doc *goquery.Document) ContentType {
 	// Check for error page indicators first
 	if hasErrorPageIndicators(doc) {
 		return ContentTypeError
+	}
+
+	// Check for paywall content (should be checked early in the sequence)
+	if hasPaywallContent(doc) {
+		return ContentTypePaywall
 	}
 
 	// Check for Wikipedia/reference structure
@@ -258,6 +266,170 @@ func hasArticleStructure(doc *goquery.Document) bool {
 
 	// Combined check
 	return hasArticleTag || (hasByline && hasDate) || hasArticleContainer
+}
+
+// hasPaywallContent checks if a document contains a paywall
+func hasPaywallContent(doc *goquery.Document) bool {
+	// Common paywall container selectors
+	paywallSelectors := []string{
+		".paywall", "#paywall", ".paywall-container", "#paywall-container",
+		".subscription-required", ".subscription-wall", ".premium-content",
+		".paid-content", ".restricted-content", ".metered-content",
+		".metered-paywall", ".subscribe-wall", ".modal-paywall", ".piano-paywall",
+		".content-gate", ".locked-content", ".article-gate", ".premium-gate",
+		".article-paywall", ".dynamic-paywall", ".reader-paywall", ".gated-content",
+	}
+
+	// Check for paywall containers
+	for _, selector := range paywallSelectors {
+		if doc.Find(selector).Length() > 0 {
+			return true
+		}
+	}
+
+	// Common paywall message patterns
+	paywallPhrases := []string{
+		"subscribe to continue", "subscription required", "subscribe now",
+		"paid subscription", "reached your limit", "free articles",
+		"create an account to continue", "free article limit", "subscribe for unlimited",
+		"premium content", "exclusive content", "premium member", "premium subscriber",
+		"continue reading with subscription", "member-only content",
+		"already a subscriber", "sign in to continue", "sign in to keep reading",
+		"already a member", "log in to continue reading", "please subscribe",
+		"reached the end of your free preview", "reached your free article limit",
+		"you've reached your", "you have reached your", "free article views", 
+		"get unlimited access", "become a subscriber", "continue reading", 
+		"to read the full", "to read this article", "remaining free articles",
+		"remaining this month", "free stories left", "read more for", 
+		"register for free to continue", "create a free account",
+		"sign up to unlock", "create an account to read",
+	}
+
+	// Check for paywall messages in specific elements (targeting overlays)
+	overlaySelectors := []string{
+		".modal", ".overlay", ".popup", ".notification", ".message",
+		".banner", ".alert", ".drawer", ".dialog", ".subscription-message",
+		"#subscribe-modal", "#subscription-modal", "#paywall-modal", 
+		".subscribe-notification", ".premium-notification", ".article-limit",
+	}
+
+	for _, selector := range overlaySelectors {
+		doc.Find(selector).Each(func(_ int, s *goquery.Selection) {
+			text := strings.ToLower(s.Text())
+			for _, phrase := range paywallPhrases {
+				if strings.Contains(text, phrase) {
+					// This overlay contains paywall messaging
+					s.AddClass("readability-paywall-element")
+				}
+			}
+		})
+	}
+
+	// Count elements marked as paywall elements
+	if doc.Find(".readability-paywall-element").Length() > 0 {
+		return true
+	}
+
+	// Check for common subscription CTA buttons alongside paywall messaging
+	subscriptionButtonSelectors := []string{
+		"a.subscribe-button", "a.subscription-button", "button.subscribe", 
+		"button.subscription", ".btn-subscribe", ".subscribe-btn",
+		"a[href*='subscribe']", "a[href*='subscription']", "a.btn-subscribe",
+		".subscribe-link", ".subscription-link", ".subscribe-cta", ".subscribe-now",
+	}
+
+	// Only count buttons if they appear near paywall messaging
+	buttonNearPaywallMessage := false
+	for _, selector := range subscriptionButtonSelectors {
+		doc.Find(selector).Each(func(_ int, s *goquery.Selection) {
+			// Check if this button is near paywall messaging
+			parent := s.Parent()
+			parentText := strings.ToLower(parent.Text())
+			
+			for _, phrase := range paywallPhrases {
+				if strings.Contains(parentText, phrase) {
+					buttonNearPaywallMessage = true
+					return
+				}
+			}
+			
+			// Check siblings too
+			siblings := s.Siblings()
+			siblingsText := strings.ToLower(siblings.Text())
+			
+			for _, phrase := range paywallPhrases {
+				if strings.Contains(siblingsText, phrase) {
+					buttonNearPaywallMessage = true
+					return
+				}
+			}
+		})
+		
+		if buttonNearPaywallMessage {
+			return true
+		}
+	}
+
+	// Look for premium content markers - articles with class indicating premium/paid content
+	premiumContentMarkers := []string{
+		".premium-content", ".paid-content", ".subscribers-only", 
+		".member-content", ".exclusive-content", ".premium", 
+		"[data-subscription='paid']", "[data-subscription='premium']",
+		"[data-premium='true']", "[data-metered='true']",
+	}
+	
+	for _, marker := range premiumContentMarkers {
+		if doc.Find(marker).Length() > 0 {
+			return true
+		}
+	}
+
+	// Check for specific content pattern: visible intro content followed by hidden full content
+	// This is a common paywall implementation where some paragraphs are visible but rest are hidden
+	visibleParagraphs := 0
+	hiddenParagraphs := 0
+	
+	doc.Find("article p, .article-body p, .article-content p, .story p").Each(func(_ int, p *goquery.Selection) {
+		// Check for hidden paragraph classes/styles
+		isHidden := false
+		
+		// Check for common hidden classes
+		for _, cls := range []string{"hidden", "paywall-content", "premium-content", "paid-content", "blurred", "blur"} {
+			if p.HasClass(cls) {
+				isHidden = true
+				break
+			}
+		}
+		
+		// Check parent containers too
+		if !isHidden {
+			p.Parents().Each(func(_ int, parent *goquery.Selection) {
+				// Only check top 3 levels of parents
+				for _, cls := range []string{"hidden", "paywall-content", "premium-content", "paid-content", "blurred", "blur"} {
+					if parent.HasClass(cls) {
+						isHidden = true
+						return
+					}
+				}
+			})
+		}
+		
+		if isHidden {
+			hiddenParagraphs++
+		} else {
+			visibleParagraphs++
+		}
+	})
+	
+	// If we have some visible and some hidden paragraphs in a ratio that suggests a paywall
+	// (typically 2-4 paragraphs visible, then rest hidden)
+	if visibleParagraphs > 0 && hiddenParagraphs > 0 && 
+	   visibleParagraphs <= 4 && hiddenParagraphs >= 2 {
+		return true
+	}
+
+	// Default case
+	return false
 }
 
 // hasMinimalContent checks if a document has minimal content (login, signup, etc.)
