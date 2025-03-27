@@ -184,39 +184,6 @@ func (r *Readability) applyContentTypeCleanup(article *goquery.Selection) {
 		
 		// Apply strict cleaning to minimal pages
 		cleanupMinimalPage(article)
-		
-		// Remove anything that isn't clearly main content
-		article.Find("aside, nav, footer, header, .sidebar, .related, .recommendations").Remove()
-		
-		// Keep only the main content area if it can be identified
-		mainContainers := article.Find("main, #main, .main, article, .article, .content, #content")
-		if mainContainers.Length() > 1 {
-			var bestContainer *goquery.Selection
-			maxScore := 0
-			
-			mainContainers.Each(func(_ int, s *goquery.Selection) {
-				// Score the container based on content
-				score := s.Find("p").Length()*3 + s.Find("h1, h2, h3").Length()*2
-				
-				// If this container has a better score, select it
-				if score > maxScore {
-					maxScore = score
-					bestContainer = s
-				}
-			})
-			
-			// If we found a best container, keep only that one
-			if bestContainer != nil && maxScore > 0 {
-				// Clone the best container
-				bestClone := bestContainer.Clone()
-				
-				// Remove all content
-				article.Children().Remove()
-				
-				// Add the best container back
-				article.AppendSelection(bestClone)
-			}
-		}
 
 	case ContentTypeArticle:
 		// Standard article cleanup - balanced approach
@@ -322,57 +289,310 @@ func cleanupErrorPage(article *goquery.Selection) {
 
 // cleanupMinimalPage removes non-essential elements from minimal pages
 func cleanupMinimalPage(article *goquery.Selection) {
-	// Remove sidebars, navigation, and other non-essential elements
-	article.Find("aside, nav, .sidebar, .nav, .navigation, .menu, .header, .footer").Remove()
+	// Enhanced cleanup for minimal content pages
+	if article == nil || article.Length() == 0 {
+		return
+	}
 	
-	// Remove all social sharing, ads, and non-essential elements
-	article.Find(".share, .sharing, .social, .ad, .advertisement, .related, .recommended").Remove()
+	// First, try to identify the main login/form container
+	formContainer := findMainFormContainer(article)
 	
-	// Remove all but the most important links
-	article.Find("a").Each(func(_ int, s *goquery.Selection) {
-		// Keep only links that are part of the main content
-		inMainContent := s.ParentsFiltered("main, article, .content, .article, #content, .main").Length() > 0
-		if !inMainContent {
-			s.Remove()
-		}
-	})
+	if formContainer != nil && formContainer.Length() > 0 {
+		// We found the main form container, focus only on it and a limited context
+		handleFormContainer(article, formContainer)
+	} else {
+		// No form container found, clean up based on general rules for minimal pages
+		performGeneralMinimalPageCleanup(article)
+	}
 	
-	// Focus on the main content area
-	article.Find("form, input, button").Each(func(_ int, s *goquery.Selection) {
-		// Keep only if it's in a main content area
-		parents := s.ParentsFiltered("main, article, .content, .main").Length()
-		if parents == 0 {
-			s.Remove()
-		}
-	})
+	// Final cleanup specific to minimal content:
+	// Remove all external links and non-essential elements
+	removeNonEssentialElements(article)
+}
+
+// findMainFormContainer identifies the primary login/form container in a minimal page
+func findMainFormContainer(article *goquery.Selection) *goquery.Selection {
+	// Look for authentication containers by common class names and IDs
+	authContainerSelectors := []string{
+		".login-container", ".login-form", ".auth-container", "#login", "#login-form", 
+		".signup-container", ".signup-form", "#signup", "#signup-form",
+		".register-container", ".registration-form", "#register", "#registration",
+		".auth-form", ".authentication", "#auth", "#authentication",
+		"form.login", "form.signup", "form.register", ".form-container",
+	}
 	
-	// If there are multiple main content areas, try to identify the most important one
-	mainContainers := article.Find("main, #main, .main, article, .article, .content, #content")
-	if mainContainers.Length() > 1 {
-		var bestContainer *goquery.Selection
-		maxScore := 0
-		
-		mainContainers.Each(func(_ int, s *goquery.Selection) {
-			// Score the container based on content
-			score := s.Find("p").Length()*3 + s.Find("h1, h2, h3").Length()*2
-			
-			// If this container has a better score, select it
-			if score > maxScore {
-				maxScore = score
-				bestContainer = s
-			}
-		})
-		
-		// If we found a best container, keep only that one
-		if bestContainer != nil && maxScore > 0 {
-			// Clone the best container
-			bestClone := bestContainer.Clone()
-			
-			// Remove all content
-			article.Children().Remove()
-			
-			// Add the best container back
-			article.AppendSelection(bestClone)
+	// Try to find the main container using common selectors
+	for _, selector := range authContainerSelectors {
+		container := article.Find(selector)
+		if container.Length() > 0 {
+			return container
 		}
 	}
+	
+	// Look for forms with password fields (likely login/signup forms)
+	formWithPassword := article.Find("form:has(input[type='password'])")
+	if formWithPassword.Length() > 0 {
+		return formWithPassword
+	}
+	
+	// Look for restricted access messages with nearby forms
+	restrictedMsgSelectors := []string{
+		":contains('must be logged in')", ":contains('login required')", 
+		":contains('please log in')", ":contains('sign in to')",
+		":contains('members only')", ":contains('restricted access')",
+		":contains('please sign in')", ":contains('login to continue')",
+	}
+	
+	for _, msgSelector := range restrictedMsgSelectors {
+		msgElement := article.Find(msgSelector)
+		if msgElement.Length() > 0 {
+			// Look for nearby forms
+			// Check parent elements up to 3 levels up
+			parent := msgElement.Parent()
+			for i := 0; i < 3 && parent.Length() > 0; i++ {
+				if parent.Find("form").Length() > 0 {
+					return parent
+				}
+				parent = parent.Parent()
+			}
+			
+			// Check siblings for form elements
+			siblings := msgElement.Siblings()
+			formSibling := siblings.Filter("form")
+			// Also look for containers
+			containerSiblings := siblings.Filter(".form-container, .login-container")
+			
+			if formSibling.Length() > 0 {
+				return formSibling
+			} else if containerSiblings.Length() > 0 {
+				return containerSiblings
+			}
+		}
+	}
+	
+	// Fall back to any form with standard login/signup input fields
+	authForm := article.Find("form:has(input#username), form:has(input#email), form:has(input[name='username']), form:has(input[name='email'])")
+	if authForm.Length() > 0 {
+		return authForm
+	}
+	
+	// No specific form container found
+	return nil
+}
+
+// handleFormContainer focuses extraction on a form container and its context
+func handleFormContainer(article *goquery.Selection, formContainer *goquery.Selection) {
+	// Identify the contextual container - could be the form's parent or a nearby container
+	contextContainer := formContainer
+	
+	// Try to include the parent container if it seems to provide context
+	parent := formContainer.Parent()
+	if parent.Length() > 0 && parent.Find("h1, h2, h3, .heading, .title").Length() > 0 {
+		contextContainer = parent
+	}
+	
+	// Look for a form title/heading to include
+	formTitle := article.Find("h1:contains('Login'), h1:contains('Sign In'), h2:contains('Login'), h2:contains('Sign In'), h1:contains('Register'), h2:contains('Register')")
+	
+	// If title is outside our container but nearby, try to include its container
+	if formTitle.Length() > 0 {
+		// Check if the title is not already inside our context container
+		titleInside := false
+		formTitle.Each(func(i int, title *goquery.Selection) {
+			titleParents := title.Parents()
+			titleParents.Each(func(j int, parent *goquery.Selection) {
+				if isSameNode(parent.Get(0), contextContainer.Get(0)) {
+					titleInside = true
+					return
+				}
+			})
+		})
+		
+		if !titleInside {
+			// Check if it's a sibling or nearby element
+			titleParent := formTitle.Parent()
+			if titleParent.Length() > 0 {
+				// Create a container for both elements
+				newContainer := getEmptyDiv()
+				newContainer.AppendSelection(titleParent.Clone())
+				newContainer.AppendSelection(contextContainer.Clone())
+				contextContainer = newContainer
+			}
+		}
+	}
+	
+	// Include messages that might be outside the form but relevant (e.g., error messages)
+	messageSelectors := []string{
+		".message", ".alert", ".error-message", ".success-message", 
+		".notification", ".info-message", ".validation-message",
+	}
+	
+	for _, selector := range messageSelectors {
+		messages := article.Find(selector)
+		messages.Each(func(i int, message *goquery.Selection) {
+			// Check if the message is already inside our container
+			messageInside := false
+			messageParents := message.Parents()
+			messageParents.Each(func(j int, parent *goquery.Selection) {
+				if parent.Length() > 0 && contextContainer.Length() > 0 {
+					if parent.Get(0) != nil && contextContainer.Get(0) != nil {
+						if isSameNode(parent.Get(0), contextContainer.Get(0)) {
+							messageInside = true
+							return
+						}
+					}
+				}
+			})
+			
+			if !messageInside {
+				// Add relevant messages only if they're near the form
+				messageTxt := strings.ToLower(message.Text())
+				if strings.Contains(messageTxt, "password") || 
+				   strings.Contains(messageTxt, "login") || 
+				   strings.Contains(messageTxt, "sign in") || 
+				   strings.Contains(messageTxt, "username") ||
+				   strings.Contains(messageTxt, "account") {
+					// Clone the message and add it to our container
+					contextContainer.AppendSelection(message.Clone())
+				}
+			}
+		})
+	}
+	
+	// Replace article content with just the context container
+	articleHtml, _ := contextContainer.Html()
+	article.SetHtml(articleHtml)
+}
+
+// performGeneralMinimalPageCleanup cleans minimal pages when no specific form is found
+func performGeneralMinimalPageCleanup(article *goquery.Selection) {
+	// Remove all obviously non-content elements
+	article.Find("aside, nav, .sidebar, .nav, .navigation, .menu, .header, .footer").Remove()
+	article.Find(".share, .sharing, .social, .ad, .advertisement, .related, .recommended").Remove()
+	
+	// Look for the main content container
+	mainSelectors := []string{
+		"main", "#main", ".main-content", ".content", "#content", 
+		"article", ".article", ".page-content", "#page-content",
+		".auth-content", ".auth-container", ".minimal-content",
+	}
+	
+	// Try to find the most relevant content container
+	var bestContainer *goquery.Selection
+	maxScore := 0
+	
+	for _, selector := range mainSelectors {
+		containers := article.Find(selector)
+		containers.Each(func(i int, container *goquery.Selection) {
+			// Score based on content elements and forms
+			score := container.Find("p").Length()*2 + 
+					 container.Find("h1, h2, h3").Length()*3 +
+					 container.Find("form, input[type='text'], input[type='password']").Length()*5
+			
+			// Check for key content indicators
+			text := strings.ToLower(container.Text())
+			if strings.Contains(text, "login") || 
+			   strings.Contains(text, "sign in") || 
+			   strings.Contains(text, "register") ||
+			   strings.Contains(text, "password") {
+				score += 10
+			}
+			
+			if score > maxScore {
+				maxScore = score
+				bestContainer = container
+			}
+		})
+	}
+	
+	// If we found a good container, focus on it
+	if bestContainer != nil && bestContainer.Length() > 0 && maxScore > 5 {
+		// Replace article content with just the best container
+		articleHtml, _ := bestContainer.Html()
+		article.SetHtml(articleHtml)
+	} else {
+		// Default cleanup - Remove navigation elements
+		article.Find("ul li a[href='/'], ul li a[href='#']").Parent().Parent().Remove()
+		article.Find("ul.menu, ul.nav, nav ul").Remove()
+		
+		// Keep only the most relevant blocks
+		article.Children().Each(func(i int, child *goquery.Selection) {
+			// Skip if it's an important element
+			if child.Is("h1, h2, form, .content, .main") {
+				return
+			}
+			
+			// Check if this element has any forms or important content
+			hasForm := child.Find("form, input[type='text'], input[type='password'], button[type='submit']").Length() > 0
+			hasHeading := child.Find("h1, h2, h3").Length() > 0
+			
+			// Calculate a relevance score
+			score := 0
+			if hasForm {
+				score += 10
+			}
+			if hasHeading {
+				score += 5
+			}
+			score += child.Find("p").Length() * 2
+			
+			// Remove if it doesn't seem relevant
+			if score < 3 {
+				child.Remove()
+			}
+		})
+	}
+}
+
+// removeNonEssentialElements performs final cleanup for minimal pages
+func removeNonEssentialElements(article *goquery.Selection) {
+	// Remove links that don't look necessary for the login functionality
+	article.Find("a").Each(func(i int, link *goquery.Selection) {
+		linkText := strings.ToLower(link.Text())
+		href, _ := link.Attr("href")
+		
+		// Keep only login-related links
+		isAuthLink := strings.Contains(linkText, "login") || 
+					  strings.Contains(linkText, "sign in") || 
+					  strings.Contains(linkText, "register") ||
+					  strings.Contains(linkText, "sign up") || 
+					  strings.Contains(linkText, "forgot password") ||
+					  strings.Contains(linkText, "reset password") ||
+					  strings.Contains(linkText, "create account")
+		
+		// Also keep links that have auth-related hrefs
+		isAuthHref := strings.Contains(href, "login") || 
+					  strings.Contains(href, "signin") || 
+					  strings.Contains(href, "register") ||
+					  strings.Contains(href, "signup") || 
+					  strings.Contains(href, "password") ||
+					  strings.Contains(href, "account")
+		
+		// If it's not an auth link and not a special case, remove it
+		if !isAuthLink && !isAuthHref && href != "#" && href != "/" {
+			// Check if it's inside a form (might be important for form function)
+			inForm := link.ParentsFiltered("form").Length() > 0
+			
+			if !inForm {
+				link.Remove()
+			}
+		}
+	})
+	
+	// Remove any remaining social media elements
+	article.Find(".social-links, .social-media, .follow-us, .share-buttons").Remove()
+	
+	// Remove any leftover banners or promotions
+	article.Find(".banner, .promo, .promotion, .advertisement, .ad-unit").Remove()
+	
+	// Remove visually hidden elements that might contain SEO content
+	article.Find("[aria-hidden='true'], .hidden, .sr-only, .visually-hidden").Remove()
+}
+
+// Note: We're using the isSameNode function from dom_helpers.go
+
+// Helper function to create an empty div for new containers
+func getEmptyDiv() *goquery.Selection {
+	doc, _ := goquery.NewDocumentFromReader(strings.NewReader("<div></div>"))
+	return doc.Find("div")
 }
