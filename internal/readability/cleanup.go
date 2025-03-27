@@ -196,37 +196,27 @@ func (r *Readability) preserveImportantLinksFromOriginal(article *goquery.Select
 	}
 }
 
-// removeElementsFromHTML removes elements from the article HTML by creating a temp document
+// removeElementsFromHTML removes elements from the article HTML
+// Uses direct DOM manipulation instead of creating temporary documents
 func (r *Readability) removeElementsFromHTML(e *goquery.Selection, tag string) {
 	if r.options.Debug {
 		fmt.Printf("DEBUG: Attempting to remove %s elements directly from article root\n", tag)
 	}
 	
-	// Get the outer HTML of the current element
-	articleHTML, err := goquery.OuterHtml(e)
-	if err != nil {
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Error getting article HTML: %v\n", err)
-		}
-		return
-	}
+	// Find elements that match the tag
+	elementsToRemove := e.Find(tag)
+	count := elementsToRemove.Length()
 	
-	// Create a completely new document from this HTML
-	tempDoc, err := goquery.NewDocumentFromReader(strings.NewReader(articleHTML))
-	if err != nil {
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Error creating temp document: %v\n", err)
-		}
-		return
-	}
-	
-	// Find the tag directly at the document level
-	elementsToRemove := tempDoc.Find(tag)
 	if r.options.Debug {
-		fmt.Printf("DEBUG: Found %d %s elements at document level\n", elementsToRemove.Length(), tag)
+		fmt.Printf("DEBUG: Found %d %s elements at root level\n", count, tag)
 	}
 	
-	// Remove all instances of the tag
+	// If no direct children match, nothing to do
+	if count == 0 {
+		return
+	}
+	
+	// Remove matching elements directly - more efficient than reconstructing the document
 	elementsToRemove.Each(func(i int, element *goquery.Selection) {
 		if r.options.Debug {
 			eleHTML, _ := goquery.OuterHtml(element)
@@ -242,7 +232,13 @@ func (r *Readability) cleanMatchedNodes(e *goquery.Selection, filter func(*goque
 	endOfSearchMarker := getNextNode(e, true)
 	node := getNextNode(e, false)
 
-	for node != nil && node.Length() > 0 && !isSameNode(node.Get(0), endOfSearchMarker.Get(0)) {
+	// Ensure we have both valid nodes to compare
+	for node != nil && node.Length() > 0 && 
+		endOfSearchMarker != nil && endOfSearchMarker.Length() > 0 &&
+		node.Get(0) != nil && endOfSearchMarker.Get(0) != nil &&
+		!isSameNode(node.Get(0), endOfSearchMarker.Get(0)) {
+		
+		// Build match string from class and ID attributes
 		matchString := ""
 		if className, exists := node.Attr("class"); exists {
 			matchString += className + " "
@@ -251,6 +247,7 @@ func (r *Readability) cleanMatchedNodes(e *goquery.Selection, filter func(*goque
 			matchString += id
 		}
 
+		// Apply filter function to determine if node should be removed
 		if filter(node, matchString) {
 			node = removeAndGetNext(node)
 		} else {

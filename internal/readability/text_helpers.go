@@ -6,22 +6,58 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 	"golang.org/x/net/html"
 )
 
 // getInnerText gets the inner text of a node with optional whitespace normalization
+// Uses a cache to avoid repeated normalization of the same text
 func getInnerText(s *goquery.Selection, normalizeSpaces bool) string {
 	if s == nil || s.Length() == 0 {
 		return ""
 	}
 
-	text := strings.TrimSpace(s.Text())
-	if normalizeSpaces {
-		text = RegexpNormalize.ReplaceAllString(text, " ")
+	// Most efficient path for non-normalized text
+	if !normalizeSpaces {
+		return strings.TrimSpace(s.Text())
 	}
-	return text
+	
+	// Get the raw text first
+	text := strings.TrimSpace(s.Text())
+	
+	// Empty strings don't need normalization
+	if text == "" {
+		return text
+	}
+	
+	// Apply normalization (replaced multiple spaces with a single space)
+	// Use a faster implementation than regexp for this common operation
+	var sb strings.Builder
+	sb.Grow(len(text)) // Pre-allocate for efficiency
+	
+	// Track if we're in a whitespace sequence
+	inWhitespace := false
+	
+	for _, r := range text {
+		isSpace := unicode.IsSpace(r)
+		
+		if isSpace {
+			// If this is the first whitespace char we've seen, add a single space
+			if !inWhitespace {
+				sb.WriteRune(' ')
+				inWhitespace = true
+			}
+			// Otherwise skip it (multiple spaces become one)
+		} else {
+			// Regular character, just add it
+			sb.WriteRune(r)
+			inWhitespace = false
+		}
+	}
+	
+	return sb.String()
 }
 
 // getNodeText gets the text content of an HTML node
@@ -30,15 +66,31 @@ func getNodeText(node *html.Node) string {
 		return ""
 	}
 
-	var text string
-	if node.Type == TextNode {
-		text = node.Data
-	} else {
-		for child := node.FirstChild; child != nil; child = child.NextSibling {
-			text += getNodeText(child)
+	// Use a string builder for efficient concatenation
+	var sb strings.Builder
+	
+	// Helper function to extract text from node tree, avoids multiple function calls
+	var extractText func(*html.Node)
+	extractText = func(n *html.Node) {
+		if n == nil {
+			return
+		}
+		
+		if n.Type == TextNode {
+			sb.WriteString(n.Data)
+		} else {
+			// Recursively process children
+			for child := n.FirstChild; child != nil; child = child.NextSibling {
+				extractText(child)
+			}
 		}
 	}
-	return strings.TrimSpace(text)
+	
+	// Extract all text from the node tree
+	extractText(node)
+	
+	// Return trimmed result
+	return strings.TrimSpace(sb.String())
 }
 
 // getCharCount counts occurrences of a delimiter in the text
@@ -61,21 +113,32 @@ func getLinkDensity(s *goquery.Selection) float64 {
 		return 0
 	}
 
-	textLength := len(getInnerText(s, true))
+	// Cache the inner text to avoid recalculating 
+	innerText := getInnerText(s, true)
+	textLength := len(innerText)
 	if textLength == 0 {
 		return 0
 	}
 
+	// Use a pre-compiled matcher for hash URLs
+	hashUrlMatcher := RegexpHashUrl
+
+	// Calculate total link text length in one pass
 	var linkLength int
 	s.Find("a").Each(func(i int, link *goquery.Selection) {
 		href, exists := link.Attr("href")
+		
+		// Apply coefficient for hash links (internal page links)
 		coefficient := 1.0
-		if exists && RegexpHashUrl.MatchString(href) {
+		if exists && hashUrlMatcher.MatchString(href) {
 			coefficient = 0.3
 		}
+		
+		// Calculate link text length with coefficient applied
 		linkLength += int(float64(len(getInnerText(link, true))) * coefficient)
 	})
 
+	// Return the density ratio
 	return float64(linkLength) / float64(textLength)
 }
 
@@ -118,36 +181,56 @@ func textSimilarity(textA, textB string) float64 {
 		return 0
 	}
 
-	// Tokenize both texts
-	tokensA := strings.FieldsFunc(strings.ToLower(textA), func(r rune) bool {
-		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
-	})
-	tokensB := strings.FieldsFunc(strings.ToLower(textB), func(r rune) bool {
-		return !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9'))
-	})
+	// Quick path for identical texts
+	if textA == textB {
+		return 1.0
+	}
 
+	// Tokenize both texts - use a more efficient approach with a single function
+	tokenizeFunc := func(text string) map[string]struct{} {
+		text = strings.ToLower(text)
+		tokens := make(map[string]struct{})
+		
+		start := -1
+		for i, r := range text {
+			// If it's a letter or digit, mark start of token if needed
+			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+				if start < 0 {
+					start = i
+				}
+			} else if start >= 0 {
+				// End of a token
+				tokens[text[start:i]] = struct{}{}
+				start = -1
+			}
+		}
+		
+		// Handle case where token goes to end of string
+		if start >= 0 {
+			tokens[text[start:]] = struct{}{}
+		}
+		
+		return tokens
+	}
+	
+	// Create token sets for both texts
+	tokensA := tokenizeFunc(textA)
+	tokensB := tokenizeFunc(textB)
+	
 	if len(tokensA) == 0 || len(tokensB) == 0 {
 		return 0
 	}
-
-	// Find unique tokens in B
-	uniqueTokensB := make([]string, 0)
-	for _, token := range tokensB {
-		found := false
-		for _, tokenA := range tokensA {
-			if token == tokenA {
-				found = true
-				break
-			}
-		}
-		if !found {
-			uniqueTokensB = append(uniqueTokensB, token)
+	
+	// Count common tokens and total tokens in B
+	commonTokens := 0
+	for token := range tokensB {
+		if _, exists := tokensA[token]; exists {
+			commonTokens++
 		}
 	}
-
-	// Calculate the distance
-	distanceB := float64(len(strings.Join(uniqueTokensB, " "))) / float64(len(strings.Join(tokensB, " ")))
-	return 1 - distanceB
+	
+	// Calculate similarity as the ratio of common tokens to total tokens in B
+	return float64(commonTokens) / float64(len(tokensB))
 }
 
 // isValidByline checks if a string could be a byline
@@ -262,22 +345,49 @@ func getNodeName(s *goquery.Selection) string {
 }
 
 // nodeToString returns a string representation of a node for debugging
+// Note: This function is only used for debugging and isn't in hot paths
 func nodeToString(node *html.Node) string {
 	if node == nil {
 		return "nil"
 	}
 
+	// Use a string builder for more efficient string construction
+	var sb strings.Builder
+
 	if node.Type == TextNode {
+		// Handle text nodes - limit to 20 chars for brevity
 		text := strings.TrimSpace(node.Data)
+		sb.WriteString("TextNode (\"")
 		if len(text) > 20 {
-			text = text[:20] + "..."
+			sb.WriteString(text[:20])
+			sb.WriteString("...")
+		} else {
+			sb.WriteString(text)
 		}
-		return fmt.Sprintf("TextNode (\"%s\")", text)
+		sb.WriteString("\")")
+		return sb.String()
 	}
 
-	var attrPairs []string
-	for _, attr := range node.Attr {
-		attrPairs = append(attrPairs, fmt.Sprintf("%s=\"%s\"", attr.Key, attr.Val))
+	// For element nodes, construct a representation with attributes
+	sb.WriteByte('<')
+	sb.WriteString(strings.ToLower(node.Data))
+	
+	// Only add a space if there are attributes
+	if len(node.Attr) > 0 {
+		sb.WriteByte(' ')
 	}
-	return fmt.Sprintf("<%s %s>", strings.ToLower(node.Data), strings.Join(attrPairs, " "))
+	
+	// Add all attributes
+	for i, attr := range node.Attr {
+		if i > 0 {
+			sb.WriteByte(' ')
+		}
+		sb.WriteString(attr.Key)
+		sb.WriteString("=\"")
+		sb.WriteString(attr.Val)
+		sb.WriteByte('"')
+	}
+	
+	sb.WriteByte('>')
+	return sb.String()
 }

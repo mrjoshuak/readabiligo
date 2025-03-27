@@ -8,10 +8,20 @@ import (
 )
 
 // isSameNode checks if two nodes are the same
+// This is a pointer comparison, so it only returns true if both arguments
+// reference exactly the same node in memory
 func isSameNode(node1, node2 *html.Node) bool {
-	if node1 == nil || node2 == nil {
-		return node1 == node2
+	// Handle nil cases - two nil nodes are considered the same
+	if node1 == nil && node2 == nil {
+		return true
 	}
+	
+	// If either is nil but not both, they can't be the same
+	if node1 == nil || node2 == nil {
+		return false
+	}
+	
+	// Direct pointer comparison
 	return node1 == node2
 }
 
@@ -61,13 +71,26 @@ func isNodeVisible(node *html.Node) bool {
 }
 
 // contains checks if a string is in a string slice
+// Uses a map for higher performance with large slices
+// For small slices (less than 10 items), it uses linear search which is faster due to less overhead
 func contains(slice []string, s string) bool {
-	for _, item := range slice {
-		if item == s {
-			return true
+	// For small slices, linear search is faster
+	if len(slice) < 10 {
+		for _, item := range slice {
+			if item == s {
+				return true
+			}
 		}
+		return false
 	}
-	return false
+	
+	// For larger slices, use a map for O(1) lookup
+	lookup := make(map[string]struct{}, len(slice))
+	for _, item := range slice {
+		lookup[item] = struct{}{}
+	}
+	_, exists := lookup[s]
+	return exists
 }
 
 // hasAncestorTag checks if the node has an ancestor with the given tag

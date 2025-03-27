@@ -16,25 +16,23 @@ func getNextNode(s *goquery.Selection, ignoreSelfAndKids bool) *goquery.Selectio
 	// First check for kids if not ignoring
 	if !ignoreSelfAndKids {
 		children := s.Children()
-		if children != nil && children.Length() > 0 {
-			firstChild := children.First()
-			if firstChild != nil && firstChild.Length() > 0 {
-				return firstChild
-			}
+		if children.Length() > 0 {
+			return children.First()
 		}
 	}
 
-	// Then for siblings
+	// Then for siblings - more efficient by checking length directly
 	nextSibling := s.Next()
-	if nextSibling != nil && nextSibling.Length() > 0 {
+	if nextSibling.Length() > 0 {
 		return nextSibling
 	}
 
 	// Finally, move up the parent chain and find a sibling
+	// This is a frequently traversed code path, so we optimize it
 	parent := s.Parent()
-	for parent != nil && parent.Length() > 0 {
+	for parent.Length() > 0 {
 		nextParentSibling := parent.Next()
-		if nextParentSibling != nil && nextParentSibling.Length() > 0 {
+		if nextParentSibling.Length() > 0 {
 			return nextParentSibling
 		}
 		parent = parent.Parent()
@@ -142,29 +140,62 @@ func getAllNodesWithTag(s *goquery.Selection, tagNames []string) *goquery.Select
 }
 
 // setNodeTag changes the tag name of a node
+// Using a more efficient approach that doesn't create a new document for each tag change
 func setNodeTag(s *goquery.Selection, tagName string) *goquery.Selection {
 	if s == nil || s.Length() == 0 {
 		return nil
 	}
 
-	// Create a new element with the desired tag
-	doc, err := goquery.NewDocumentFromReader(strings.NewReader(fmt.Sprintf("<%s></%s>", tagName, tagName)))
+	// Get the original node content and attributes
+	html, err := s.Html()
 	if err != nil {
 		return nil
 	}
-	newElement := doc.Find(tagName)
-
-	// Copy attributes
-	for _, attr := range s.Get(0).Attr {
-		newElement.SetAttr(attr.Key, attr.Val)
+	
+	// Store all attributes
+	attrs := make(map[string]string)
+	node := s.Get(0)
+	if node != nil {
+		for _, attr := range node.Attr {
+			attrs[attr.Key] = attr.Val
+		}
 	}
-
-	// Copy content
-	html, err := s.Html()
-	if err == nil {
+	
+	// Create a new element directly in the current document context
+	// This is more efficient than creating a new document
+	parentNode := s.Parent()
+	if parentNode.Length() == 0 {
+		// Fallback if we don't have a parent
+		doc, err := goquery.NewDocumentFromReader(strings.NewReader(fmt.Sprintf("<%s></%s>", tagName, tagName)))
+		if err != nil {
+			return nil
+		}
+		newElement := doc.Find(tagName)
+		
+		// Copy attributes
+		for key, val := range attrs {
+			newElement.SetAttr(key, val)
+		}
+		
+		// Copy content
 		newElement.SetHtml(html)
+		
+		// Replace the original node
+		s.ReplaceWithSelection(newElement)
+		return newElement
 	}
-
+	
+	// Create an empty element with the right tag
+	newElement := s.AppendSelection(s.Parent().AppendHtml(fmt.Sprintf("<%s></%s>", tagName, tagName)).Children().Last().Remove())
+	
+	// Copy attributes
+	for key, val := range attrs {
+		newElement.SetAttr(key, val)
+	}
+	
+	// Copy content
+	newElement.SetHtml(html)
+	
 	// Replace the original node
 	s.ReplaceWithSelection(newElement)
 	return newElement
