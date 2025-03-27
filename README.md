@@ -80,8 +80,6 @@ Options:
         Output directory for batch processing (default: same as input)
   -format string
         Output format: json, html, or text (default "json")
-  -readability
-        Use legacy Readability.js if available (default false)
   -digests
         Add content digest attributes
   -indexes
@@ -156,7 +154,6 @@ import (
 func main() {
 	// Create a new extractor with custom options
 	ext := extractor.New(
-		extractor.WithReadability(false),      // Use pure Go implementation (default)
 		extractor.WithContentDigests(true),    // Add content digest attributes
 		extractor.WithNodeIndexes(true),       // Add node index attributes
 		extractor.WithTimeout(time.Second*60), // Set a 60-second timeout
