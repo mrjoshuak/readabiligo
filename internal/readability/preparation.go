@@ -26,10 +26,16 @@ func (r *Readability) prepArticle(articleContent *goquery.Selection) {
 	r.clean(articleContent, "embed")
 	
 	// Now safe to remove these container elements
-	r.clean(articleContent, "footer")
+	// Only remove footers, asides, and navs if we're not preserving important links
+	// Otherwise, let finalCleanupFooters handle them later
+	if !r.options.PreserveImportantLinks {
+		r.clean(articleContent, "footer")
+		r.clean(articleContent, "aside")
+		r.clean(articleContent, "nav") // Explicitly remove navigation elements
+	}
+	
+	// Always clean link elements (not anchor links, but link tag)
 	r.clean(articleContent, "link")
-	r.clean(articleContent, "aside")
-	r.clean(articleContent, "nav") // Explicitly remove navigation elements
 	
 	// Clean duplicate headings early
 	r.cleanHeaders(articleContent)

@@ -1,6 +1,7 @@
 package readability
 
 import (
+	"fmt"
 	"math"
 	"regexp"
 	"sort"
@@ -17,21 +18,90 @@ func (r *Readability) grabArticle() *goquery.Selection {
 		return nil
 	}
 
-	// If enabled, extract and preserve important links from elements that might be removed
-	// This is an optional feature that's not part of the original Readability.js algorithm
+	// If enabled, we need to handle important links in footers, asides, and nav elements
+	// This is a key feature that distinguishes our implementation from standard Readability.js
 	if r.options.PreserveImportantLinks {
-		// Find links that might be important in elements likely to be removed
-		importantLinksContainer := r.findAndExtractImportantLinks(r.doc.Find("footer, aside, nav, .footer"))
+		// Check if we need to include any footers from the original document that weren't
+		// included in the article content but contain important links
+		docFooters := r.doc.Find("footer, .footer, aside")
 		
-		// If we found any important links, add them to the article content
-		if importantLinksContainer != nil {
-			importantLinksContainer.SetAttr("id", "readability-important-links")
-			articleContent.AppendSelection(importantLinksContainer)
+		// Debug output
+		if r.options.Debug {
+			footersInArticle := articleContent.Find("footer, .footer").Length()
+			footersInDoc := docFooters.Length()
+			fmt.Printf("DEBUG: Found %d footers in article content, %d in original document\n", 
+				footersInArticle, footersInDoc)
+		}
+
+		// Look for important links in footers, asides, etc. that may have been excluded
+		// Note: We only need to do this for elements that aren't already in the article
+		if articleContent.Find("footer, .footer, aside").Length() == 0 && docFooters.Length() > 0 {
+			// Check each footer, aside, etc. for important links
+			docFooters.Each(func(i int, elem *goquery.Selection) {
+				// Check if this element has important links
+				hasImportant := false
+				elem.Find("a").Each(func(j int, link *goquery.Selection) {
+					if r.isImportantLink(link) {
+						hasImportant = true
+						return
+					}
+				})
+				
+				// If this element has important links, clone and append it to the article
+				// This ensures it will be processed by finalCleanupFooters later
+				if hasImportant {
+					if r.options.Debug {
+						fmt.Printf("DEBUG: Found important links in outer document, preserving element\n")
+					}
+					elemCopy := elem.Clone()
+					articleContent.AppendSelection(elemCopy)
+				}
+			})
 		}
 	}
 
 	// Clean up
 	r.prepArticle(articleContent)
+	
+	// Special case for footer elements when preserving important links
+	// We want to make sure footers with important links are processed by finalCleanupFooters
+	if r.options.PreserveImportantLinks {
+		// Find links that might be important in footer elements
+		footersWithImportantLinks := r.doc.Find("footer, .footer")
+		// Filter to only keep those with important links
+		filteredFooters := footersWithImportantLinks.FilterFunction(func(i int, s *goquery.Selection) bool {
+			return r.hasImportantLinks(s)
+		})
+		footersWithImportantLinks = filteredFooters
+		
+		// If we found any footers with important links, make sure they're in the article
+		if footersWithImportantLinks.Length() > 0 && articleContent.Find("footer, .footer").Length() == 0 {
+			if r.options.Debug {
+				fmt.Printf("DEBUG: Found %d footers with important links in document\n", 
+					footersWithImportantLinks.Length())
+			}
+			
+			// Add a container for the important links that will be preserved
+			importantLinksContainer := r.createElement("footer")
+			importantLinksContainer.SetAttr("class", "readability-footer-with-important-links")
+			
+			// Process each footer with important links
+			footersWithImportantLinks.Each(func(i int, footer *goquery.Selection) {
+				// Extract just the important links
+				footer.Find("a").Each(func(j int, link *goquery.Selection) {
+					if r.isImportantLink(link) {
+						linkCopy := link.Clone()
+						p := r.createElement("p")
+						p.AppendSelection(linkCopy)
+						importantLinksContainer.AppendSelection(p)
+					}
+				})
+			})
+			
+			// Add the container to the article
+			articleContent.AppendSelection(importantLinksContainer)
+		}
+	}
 
 	// Check word count and retry with different flags if needed
 	textLength := len(getInnerText(articleContent, true))
@@ -150,6 +220,7 @@ func (r *Readability) initializeDocumentBody() *goquery.Selection {
 func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery.Selection {
 	elementsToScore := []*goquery.Selection{}
 	shouldRemoveTitleHeader := true
+	nestingLevels := make(map[*goquery.Selection]int) // Track nesting levels for elements
 
 	// First pass: node preparation and scoring
 	// Start with either the html element or the body if there's no html
@@ -170,6 +241,10 @@ func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery
 		}
 	}
 	
+	// Calculate nesting levels for all elements to help with deeply nested content
+	r.calculateNestingLevels(body, nestingLevels, 0)
+	
+	// Main traversal loop
 	for node != nil && node.Length() > 0 {
 		nodeTagName := getNodeName(node)
 
@@ -216,8 +291,22 @@ func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery
 			continue
 		}
 
-		// Remove unlikely candidates
-		if r.flags&FlagStripUnlikelys != 0 {
+		// Handle deeply nested headings differently - we should prioritize them
+		nestingLevel := nestingLevels[node]
+		isHeading := nodeTagName == "H1" || nodeTagName == "H2" || nodeTagName == "H3" || 
+		             nodeTagName == "H4" || nodeTagName == "H5" || nodeTagName == "H6"
+		
+		// For deeply nested headings, be more lenient with unlikely candidate removal
+		isDeeplyNested := nestingLevel >= 5
+		if isDeeplyNested && isHeading {
+			// Always add deeply nested headings to scoring
+			elementsToScore = append(elementsToScore, node)
+			node = getNextNode(node, false)
+			continue
+		}
+
+		// Remove unlikely candidates (be less aggressive with unlikely removal for deep nesting)
+		if r.flags&FlagStripUnlikelys != 0 && (!isDeeplyNested || matchString == "") {
 			if RegexpUnlikelyCandidates.MatchString(matchString) && !RegexpMaybeCandidate.MatchString(matchString) && 
 			   !hasAncestorTag(node, "table", -1, nil) && !hasAncestorTag(node, "code", -1, nil) && 
 			   nodeTagName != "BODY" && nodeTagName != "A" {
@@ -225,8 +314,8 @@ func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery
 				continue
 			}
 
-			// Check for unlikely roles
-			if role, exists := node.Attr("role"); exists {
+			// Check for unlikely roles (be more lenient with deeply nested content)
+			if role, exists := node.Attr("role"); exists && (!isDeeplyNested || role == "banner" || role == "advertisement") {
 				for _, unlikelyRole := range UnlikelyRoles {
 					if role == unlikelyRole {
 						node = removeAndGetNext(node)
@@ -237,16 +326,24 @@ func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery
 		}
 
 		// Remove DIV, SECTION, and HEADER nodes without content
+		// For deeply nested content, be more lenient with content requirements
+		contentRequirement := isElementWithoutContent
+		if isDeeplyNested {
+			// For deeply nested elements, use a more lenient definition of "without content"
+			contentRequirement = isElementCompletelyEmpty
+		}
+		
 		if (nodeTagName == "DIV" || nodeTagName == "SECTION" || nodeTagName == "HEADER" || 
 			nodeTagName == "H1" || nodeTagName == "H2" || nodeTagName == "H3" || 
 			nodeTagName == "H4" || nodeTagName == "H5" || nodeTagName == "H6") && 
-			isElementWithoutContent(node) {
+			contentRequirement(node) {
 			node = removeAndGetNext(node)
 			continue
 		}
 
 		// Add to elements to score
 		if contains(DefaultTagsToScore, nodeTagName) {
+			// For deeply nested content, add bonus score
 			elementsToScore = append(elementsToScore, node)
 		}
 
@@ -270,6 +367,28 @@ func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery
 	}
 	
 	return elementsToScore
+}
+
+// calculateNestingLevels recursively calculates how deeply nested each element is
+// This helps with scoring deeply nested content appropriately
+func (r *Readability) calculateNestingLevels(node *goquery.Selection, nestingLevels map[*goquery.Selection]int, currentLevel int) {
+	if node == nil || node.Length() == 0 {
+		return
+	}
+	
+	// Store the current nesting level for this node
+	nestingLevels[node] = currentLevel
+	
+	// Recursively process all children
+	node.Children().Each(func(i int, child *goquery.Selection) {
+		r.calculateNestingLevels(child, nestingLevels, currentLevel+1)
+	})
+}
+
+// isElementCompletelyEmpty checks if an element has absolutely no content
+// Used for deeply nested content to be more lenient than isElementWithoutContent
+func isElementCompletelyEmpty(e *goquery.Selection) bool {
+	return strings.TrimSpace(getInnerText(e, false)) == "" && e.Children().Length() == 0
 }
 
 // scoreNodes calculates scores for all candidate nodes
@@ -309,20 +428,35 @@ func (r *Readability) scoreNodes(elementsToScore []*goquery.Selection) []*NodeIn
 
 // scoreAncestors assigns scores to the ancestors of content elements
 func (r *Readability) scoreAncestors(ancestors []*goquery.Selection, candidates []*NodeInfo, contentScore float64) []*NodeInfo {
+	// Use a flatter scoreDivider curve for deep nesting
+	maxLevel := len(ancestors) - 1
+	
 	for level, ancestor := range ancestors {
 		// Skip nodes without tag name or parent
 		if getNodeName(ancestor) == "" || ancestor.Parent().Length() == 0 {
 			continue
 		}
 
-		// Calculate score divider based on level
+		// Calculate score divider based on level, with special handling for deep nesting
 		var scoreDivider float64
 		if level == 0 {
 			scoreDivider = AncestorScoreDividerL0
 		} else if level == 1 {
 			scoreDivider = AncestorScoreDividerL1
+		} else if level > 5 {
+			// Use a logarithmic scale for very deep nesting to prevent excessive penalty
+			// This helps deeply nested content get a more fair score
+			scoreDivider = AncestorScoreDividerL1 + math.Log(float64(level)) * AncestorScoreDividerMultiplier
 		} else {
 			scoreDivider = float64(level) * AncestorScoreDividerMultiplier
+		}
+		
+		// Boost scores for nodes at very deep levels when there's a deeply nested hierarchy
+		// This helps counteract the normal bias against deep nesting
+		deepNestingBoost := 1.0
+		if maxLevel > 5 && level > 3 {
+			deepNestingBoost = 1.0 + (float64(level) / float64(maxLevel)) * 0.5
+			contentScore *= deepNestingBoost
 		}
 
 		// Initialize node info and add to candidates if new
@@ -346,7 +480,12 @@ func (r *Readability) scoreAncestors(ancestors []*goquery.Selection, candidates 
 			case "ADDRESS", "OL", "UL", "DL", "DD", "DT", "LI", "FORM":
 				scoreInitial = NegativeListInitialScore
 			case "H1", "H2", "H3", "H4", "H5", "H6", "TH":
-				scoreInitial = HeadingInitialScore
+				// Give higher initial score to headings in deep structures
+				if maxLevel > 5 && level > 3 {
+					scoreInitial = HeadingInitialScore * 1.5
+				} else {
+					scoreInitial = HeadingInitialScore
+				}
 			}
 
 			// Adjust for class/id weight

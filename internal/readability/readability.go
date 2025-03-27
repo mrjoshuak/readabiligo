@@ -191,6 +191,12 @@ func (r *Readability) Parse() (*ReadabilityArticle, error) {
 		fmt.Printf("DEBUG: Final cleanup pass to remove any remaining footer elements\n")
 	}
 	
+	// Apply the final cleanup to handle footer elements and important links
+	if r.options.PreserveImportantLinks {
+		// Explicitly search for important links anywhere in the article before final cleanup
+		r.preserveImportantLinksAnywhere(article)
+	}
+	
 	// Apply the final cleanup to handle footer elements
 	r.finalCleanupFooters(article)
 	

@@ -362,3 +362,142 @@ func TestLinkPreservation(t *testing.T) {
 	// Test passes regardless of whether link is preserved in the no-preserve case,
 	// as the behavior depends on whether the link is in a footer or not
 }
+
+// TestEnhancedImportantLinksPreservation tests the enhanced important link recognition patterns
+// using the public extractor API
+func TestEnhancedImportantLinksPreservation(t *testing.T) {
+	// HTML with various "important link" patterns
+	html := `<!DOCTYPE html>
+<html>
+<head>
+	<title>Enhanced Link Pattern Test</title>
+</head>
+<body>
+	<article>
+		<h1>Main Content</h1>
+		<p>This is the main content.</p>
+		<footer>
+			<div>
+				<a href="https://example.com/more-1">Read more</a>
+				<a href="https://example.com/more-2">More info</a>
+				<a href="https://example.com/more-3">See more</a>
+				<a href="https://example.com/more-4">View more</a>
+				<a href="https://example.com/more-5">Read full</a>
+				<a href="https://example.com/more-6">Continue reading</a>
+				<a href="https://example.com/more-7">...</a>
+				<a href="https://example.com/more-8">More</a>
+				<a href="https://example.com/more-9">Click for more</a>
+				<a href="https://example.com/more-10">See also</a>
+			</div>
+		</footer>
+	</article>
+</body>
+</html>`
+
+	// Use the public API extractor with important link preservation enabled
+	ex := extractor.New(
+		extractor.WithContentDigests(false),
+		extractor.WithPreserveImportantLinks(true), // Enable link preservation (comma here)
+		// Debug is not exposed through extractor API, use debug flag on readability options
+	)
+	
+	// Extract the article
+	article, err := ex.ExtractFromHTML(html, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, article)
+	
+	// Print the article content for debugging
+	t.Logf("Article content: %s", article.Content)
+	
+	// Check for each important link pattern to be preserved
+	patterns := []string{
+		"Read more", "More info", "See more", "View more", 
+		"Read full", "Continue reading", "...", "More",
+		"Click for more", "See also",
+	}
+	
+	for _, pattern := range patterns {
+		assert.Contains(t, article.Content, pattern, "Important link pattern not preserved: %s", pattern)
+	}
+}
+
+// TestImportantLinksInContent directly tests the internal important link preservation
+func TestImportantLinksInContent(t *testing.T) {
+	// Create a simpler test case with a link that should be preserved
+	htmlSimple := `<!DOCTYPE html>
+<html>
+<head>
+	<title>Simple Important Link Test</title>
+</head>
+<body>
+	<article>
+		<h1>Article with Link</h1>
+		<p>This is an article that has an important link.</p>
+		<p><a href="/more">Read more</a></p>
+	</article>
+</body>
+</html>`
+
+	// Create parser with important link preservation enabled via the internal API
+	opts := &readability.ReadabilityOptions{
+		Debug:                  true, // Enable debug output
+		CharThreshold:          500,
+		PreserveImportantLinks: true, // Enable link preservation
+	}
+	
+	// Parse the HTML
+	r, err := readability.NewFromHTML(htmlSimple, opts)
+	assert.NoError(t, err)
+	
+	// Extract the article
+	article, err := r.Parse()
+	assert.NoError(t, err)
+	assert.NotNil(t, article)
+	
+	// Print the article content for debugging
+	t.Logf("Simple article content: %s", article.Content)
+	
+	// Check for the important link
+	assert.Contains(t, article.Content, "Read more", "Important link not preserved in simple article")
+}
+
+// TestDeeplyNestedContentExtraction tests the improved handling of deeply nested content
+func TestDeeplyNestedContentExtraction(t *testing.T) {
+	// Create HTML with deeply nested content (6+ levels deep)
+	html := `<!DOCTYPE html>
+<html>
+<head>
+	<title>Deeply Nested Content Test</title>
+</head>
+<body>
+	<div class="wrapper">
+		<div class="container">
+			<div class="section">
+				<div class="subsection">
+					<div class="content-area">
+						<div class="inner-content">
+							<div class="deep-content">
+								<h2>Deeply Nested Heading</h2>
+								<p>This content is nested 7 levels deep and should be extracted properly.</p>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
+</body>
+</html>`
+
+	// Create extractor with default options
+	ex := extractor.New()
+	
+	// Extract the article
+	article, err := ex.ExtractFromHTML(html, nil)
+	assert.NoError(t, err)
+	assert.NotNil(t, article)
+	
+	// Check that the deeply nested content is properly extracted
+	assert.Contains(t, article.Content, "Deeply Nested Heading")
+	assert.Contains(t, article.Content, "This content is nested 7 levels deep")
+}

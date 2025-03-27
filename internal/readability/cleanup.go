@@ -587,7 +587,7 @@ func (r *Readability) finalCleanupFooters(article *goquery.Selection) {
 	}
 	
 	// Find all footers in the article
-	footers := article.Find("footer")
+	footers := article.Find("footer, .footer")
 	if r.options.Debug {
 		fmt.Printf("DEBUG: Found %d footer elements in final article content\n", footers.Length())
 	}
@@ -595,36 +595,71 @@ func (r *Readability) finalCleanupFooters(article *goquery.Selection) {
 	// Handle footers based on options and presence
 	if footers.Length() > 0 {
 		if r.options.PreserveImportantLinks {
-			r.cleanupFootersWithLinksPreservation(article, footers)
+			// First, thoroughly check for important links in each footer
+			hasImportantLinks := false
+			allImportantLinks := r.createElement("div")
+			allImportantLinks.SetAttr("class", "readability-preserved-links-container")
+			
+			footers.Each(func(i int, footer *goquery.Selection) {
+				// Check if this footer has any important links
+				importantLinksFound := false
+				
+				footer.Find("a").Each(func(j int, link *goquery.Selection) {
+					if r.isImportantLink(link) {
+						// Clone the link and create paragraph element
+						linkCopy := link.Clone()
+						p := r.createElement("p")
+						p.AppendSelection(linkCopy)
+						allImportantLinks.AppendSelection(p)
+						
+						importantLinksFound = true
+						hasImportantLinks = true
+					}
+				})
+				
+				// Debug logging
+				if r.options.Debug && importantLinksFound {
+					fmt.Printf("DEBUG: Found important links in footer element #%d\n", i)
+				}
+			})
+			
+			// If any important links were found, add them to the article
+			if hasImportantLinks && allImportantLinks.Children().Length() > 0 {
+				// Add a clear container for the important links
+				linkContainer := r.createElement("div")
+				linkContainer.SetAttr("class", "readability-preserved-links-section")
+				
+				// Add a heading to indicate these are important links
+				heading := r.createElement("h3")
+				heading.SetText("Additional Links")
+				linkContainer.AppendSelection(heading)
+				
+				// Add the important links
+				linkContainer.AppendSelection(allImportantLinks)
+				article.AppendSelection(linkContainer)
+				
+				if r.options.Debug {
+					fmt.Printf("DEBUG: Added important links section to article\n")
+				}
+			}
+			
+			// Now remove all footer elements regardless of whether they had important links
+			// since we've already extracted and saved the important links
+			r.removeAllFooters(article, footers)
 		} else {
+			// If not preserving links, just remove all footers
 			r.removeAllFooters(article, footers)
 		}
 	}
 }
 
-// cleanupFootersWithLinksPreservation handles footer cleanup when important links should be preserved
+// This function has been replaced with a more robust implementation in finalCleanupFooters
+// Keeping as a stub for backward compatibility
 func (r *Readability) cleanupFootersWithLinksPreservation(article *goquery.Selection, footers *goquery.Selection) {
-	// For preservation mode: Keep footer content only if it has important links
-	footers.Each(func(i int, footer *goquery.Selection) {
-		// Extract important links
-		importantLinks := r.findAndExtractImportantLinks(footer)
-		
-		if importantLinks != nil && importantLinks.Children().Length() > 0 {
-			// If we found important links, add them to a separate container
-			if r.options.Debug {
-				fmt.Printf("DEBUG: Found important links in footer, preserving\n")
-			}
-			
-			// DON'T remove the footer, just add the links separately for redundancy
-			article.AppendSelection(importantLinks)
-		} else if !r.options.PreserveImportantLinks {
-			// No important links and not in preservation mode, remove the footer
-			if r.options.Debug {
-				fmt.Printf("DEBUG: Removing footer in final cleanup: %s\n", getOuterHTML(footer))
-			}
-			footer.Remove()
-		}
-	})
+	// This function is now a no-op - all functionality is in finalCleanupFooters
+	if r.options.Debug {
+		fmt.Printf("DEBUG: cleanupFootersWithLinksPreservation is deprecated, using finalCleanupFooters\n")
+	}
 }
 
 // removeAllFooters removes all footer elements from the article
@@ -683,17 +718,129 @@ func (r *Readability) hasImportantLinks(node *goquery.Selection) bool {
 	return hasImportant
 }
 
+// preserveImportantLinksAnywhere finds and preserves important links anywhere in the article content
+func (r *Readability) preserveImportantLinksAnywhere(article *goquery.Selection) {
+	if !r.options.PreserveImportantLinks {
+		return
+	}
+	
+	// Create a container for important links we find
+	allImportantLinks := r.createElement("div")
+	allImportantLinks.SetAttr("class", "readability-preserved-links-from-anywhere")
+	
+	// Find any links in the article that match our important link patterns
+	foundLinks := false
+	
+	// First check for elements with related-links class or similar patterns
+	relatedLinkContainers := article.Find("div.related-links, div.related-articles, div.more-links, ul.related-links, .more-reading")
+	relatedLinkContainers.Each(func(i int, container *goquery.Selection) {
+		container.Find("a").Each(func(j int, link *goquery.Selection) {
+			// Clone this link and add it to our collection
+			linkCopy := link.Clone()
+			p := r.createElement("p")
+			p.AppendSelection(linkCopy)
+			allImportantLinks.AppendSelection(p)
+			foundLinks = true
+		})
+	})
+	
+	// Then check for important links by text pattern
+	article.Find("a").Each(func(i int, link *goquery.Selection) {
+		if r.isImportantLink(link) {
+			// Don't add duplicates
+			linkHref, hasHref := link.Attr("href")
+			if !hasHref {
+				return
+			}
+			
+			// Check if we already have this link by examining hrefs
+			isDuplicate := false
+			allImportantLinks.Find("a").Each(func(j int, existingLink *goquery.Selection) {
+				existingHref, _ := existingLink.Attr("href")
+				if existingHref == linkHref {
+					isDuplicate = true
+					return
+				}
+			})
+			
+			if !isDuplicate {
+				// Clone this link and add it to our collection
+				linkCopy := link.Clone()
+				p := r.createElement("p")
+				p.AppendSelection(linkCopy)
+				allImportantLinks.AppendSelection(p)
+				foundLinks = true
+			}
+		}
+	})
+	
+	// If we found important links, add them to the article
+	if foundLinks {
+		// Create a clear container for these links
+		linkContainer := r.createElement("div")
+		linkContainer.SetAttr("class", "readability-important-links-section")
+		
+		// Add a heading
+		heading := r.createElement("h3")
+		heading.SetText("Important Links")
+		linkContainer.AppendSelection(heading)
+		
+		// Add the important links
+		linkContainer.AppendSelection(allImportantLinks)
+		
+		// Append to the article
+		article.AppendSelection(linkContainer)
+		
+		if r.options.Debug {
+			fmt.Printf("DEBUG: Added important links section from article content\n")
+		}
+	}
+}
+
 // isImportantLink checks if a link has text matching patterns we consider important
 func (r *Readability) isImportantLink(link *goquery.Selection) bool {
 	linkText := getInnerText(link, true)
 	linkTextLower := strings.ToLower(linkText)
 	
+	// List of important link patterns
+	importantPatterns := []string{
+		"more information",
+		"more info",
+		"read more",
+		"continue reading",
+		"learn more", 
+		"see more",
+		"view more",
+		"read full",
+		"full article",
+		"full story",
+		"continue",
+		"click for more",
+		"view article",
+		"continue reading",
+		"see also",
+		"related article",
+		"more on this",
+	}
+	
 	// Check if this is an important link by text pattern
-	return strings.Contains(linkTextLower, "more information") || 
-	       strings.Contains(linkTextLower, "more info") || 
-	       strings.Contains(linkTextLower, "read more") ||
-	       strings.Contains(linkTextLower, "continue reading") ||
-	       strings.Contains(linkTextLower, "learn more")
+	for _, pattern := range importantPatterns {
+		if strings.Contains(linkTextLower, pattern) {
+			return true
+		}
+	}
+	
+	// Also check for ellipsis pattern "..." which often indicates more content
+	if strings.Contains(linkTextLower, "...") && len(linkTextLower) < 30 {
+		return true
+	}
+	
+	// Check for "more" as a standalone word or at the end of text
+	if linkTextLower == "more" || strings.HasSuffix(linkTextLower, " more") {
+		return true
+	}
+	
+	return false
 }
 
 // cleanStyles removes style attributes from elements
