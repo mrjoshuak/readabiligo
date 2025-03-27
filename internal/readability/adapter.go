@@ -13,8 +13,6 @@
 package readability
 
 import (
-	"fmt"
-
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
 	"github.com/mrjoshuak/readabiligo/types"
@@ -41,7 +39,7 @@ func ExtractFromHTML(html string, options *types.ExtractionOptions) (*types.Arti
 	// Parse HTML using Readability algorithm
 	readabilityArticle, err := ParseHTML(html, &opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse HTML content: %w", err)
+		return nil, WrapExtractionError(err, "ExtractFromHTML", "failed to parse HTML content")
 	}
 
 	// Convert to standard article format
@@ -53,7 +51,7 @@ func ExtractFromHTML(html string, options *types.ExtractionOptions) (*types.Arti
 	// Generate plain content with content digests and node indexes if requested
 	plainContent, err := simplifiers.PlainContent(result.Content, options.ContentDigests, options.NodeIndexes)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate plain content: %w", err)
+		return nil, WrapExtractionError(err, "ExtractFromHTML", "failed to generate plain content")
 	}
 	result.PlainContent = plainContent
 

@@ -105,7 +105,7 @@ func NewFromDocument(doc *goquery.Document, opts *ReadabilityOptions) *Readabili
 func NewFromHTML(html string, opts *ReadabilityOptions) (*Readability, error) {
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
-		return nil, err
+		return nil, WrapParseError(err, "NewFromHTML", "failed to parse HTML document")
 	}
 
 	return NewFromDocument(doc, opts), nil
@@ -115,14 +115,18 @@ func NewFromHTML(html string, opts *ReadabilityOptions) (*Readability, error) {
 func (r *Readability) Parse() (*ReadabilityArticle, error) {
 	// Check document
 	if r.doc == nil || r.doc.Selection.Length() == 0 {
-		return nil, fmt.Errorf("no document to parse")
+		return nil, WrapValidationError(ErrNoDocument, "Parse", "")
 	}
 
 	// Check if document is too large
 	if r.options.MaxElemsToParse > 0 {
 		numNodes := r.doc.Find("*").Length()
 		if numNodes > r.options.MaxElemsToParse {
-			return nil, fmt.Errorf("document too large (%d elements)", numNodes)
+			err := WrapValidationError(ErrDocumentLarge, "Parse", "")
+			// Add extra context information to the error message
+			err = fmt.Errorf("%w: %d elements (exceeds limit of %d)", 
+				err, numNodes, r.options.MaxElemsToParse)
+			return nil, err
 		}
 	}
 
@@ -162,7 +166,7 @@ func (r *Readability) Parse() (*ReadabilityArticle, error) {
 	// Grab article content
 	article := r.grabArticle()
 	if article == nil {
-		return nil, fmt.Errorf("could not extract article content")
+		return nil, WrapExtractionError(ErrNoContent, "Parse", "")
 	}
 
 	// Post-process content

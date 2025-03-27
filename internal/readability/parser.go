@@ -1,8 +1,6 @@
 package readability
 
 import (
-	"fmt"
-	
 	"github.com/mrjoshuak/readabiligo/types"
 )
 
@@ -12,7 +10,7 @@ func ParseHTMLWithReadability(html string, opts *ReadabilityOptions) (*Readabili
 	// Create a new Readability instance from HTML
 	r, err := NewFromHTML(html, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Readability parser: %w", err)
+		return nil, WrapParseError(err, "ParseHTMLWithReadability", "failed to create Readability parser")
 	}
 
 	// Run the Readability algorithm
