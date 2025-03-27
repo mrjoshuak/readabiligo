@@ -9,14 +9,14 @@ This package is a Go port of [ReadabiliPy](https://github.com/alan-turing-instit
 - Extract article content, title, byline, and date from HTML
 - Output in JSON, HTML, or plain text formats
 - Support for content digests and node indexes for tracking HTML structure
-- Pure Go implementation with optional Readability.js integration
+- 100% Pure Go implementation, no JavaScript dependencies
 - Comprehensive test suite with real-world examples
 
 ## Installation
 
 ### Prerequisites
 
-To use the Readability.js integration, you need to have [Node.js](https://nodejs.org/) version 10 or higher installed. If you only want to use the pure Go implementation, Node.js is not required.
+No external dependencies are required! ReadabiliGo now uses a pure Go implementation of the Readability algorithm.
 
 ### Installing the Command-Line Tool
 
@@ -81,7 +81,7 @@ Options:
   -format string
         Output format: json, html, or text (default "json")
   -readability
-        Use Readability.js if available (default true)
+        Use legacy Readability.js if available (default false)
   -digests
         Add content digest attributes
   -indexes
@@ -156,7 +156,7 @@ import (
 func main() {
 	// Create a new extractor with custom options
 	ext := extractor.New(
-		extractor.WithReadability(true),       // Use Readability.js if available
+		extractor.WithReadability(false),      // Use pure Go implementation (default)
 		extractor.WithContentDigests(true),    // Add content digest attributes
 		extractor.WithNodeIndexes(true),       // Add node index attributes
 		extractor.WithTimeout(time.Second*60), // Set a 60-second timeout
@@ -205,7 +205,8 @@ Additional notes:
 ReadabiliGo is designed to be compatible with ReadabiliPy, with the following differences:
 
 - Implemented in Go instead of Python
-- Uses Go's standard library for HTML parsing instead of BeautifulSoup
+- Uses a pure Go implementation of Readability.js with no JavaScript dependencies
+- Potentially better performance due to Go's efficiency compared to Python
 - Concurrent extraction with timeout support
 - Enhanced command-line interface with batch processing capabilities
 - Multiple output format options (JSON, HTML, text)

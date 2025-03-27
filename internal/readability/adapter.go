@@ -1,3 +1,15 @@
+// Package readability provides a pure Go implementation of Mozilla's Readability.js
+// algorithm for extracting article content from web pages.
+//
+// This implementation follows the same content extraction logic as the original
+// JavaScript implementation, including scoring elements based on content quality,
+// handling special cases, and cleaning up the final article content.
+//
+// Key features:
+// - No JavaScript dependencies (100% Go)
+// - Compatible with Mozilla's Readability algorithm
+// - Proper handling of important links, headings, and navigation elements
+// - Built-in adapters for integration with the main extractor package
 package readability
 
 import (
