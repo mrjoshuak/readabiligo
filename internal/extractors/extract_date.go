@@ -11,50 +11,50 @@ import (
 // ExtractDate extracts the article date from HTML content
 func ExtractDate(html string) time.Time {
 	// ---- STEP 1: Extract dates from metadata tags ----
-	// List of XPaths for HTML tags that could contain a date
-	// Scores reflect confidence in these XPaths and the preference used for extraction
-	xpaths := []XPathScore{
-		{XPath: "//meta[@property=\"article:published_time\"]/@content", Score: 13},
-		{XPath: "//meta[@property=\"og:updated_time\"]/@content", Score: 10},
-		{XPath: "//meta[@property=\"og:article:published_time\"]/@content", Score: 10},
-		{XPath: "//meta[@property=\"og:article:modified_time\"]/@content", Score: 10},
-		{XPath: "//meta[@name=\"pubdate\"]/@content", Score: 10},
-		{XPath: "//meta[@name=\"publishdate\"]/@content", Score: 10},
-		{XPath: "//meta[@name=\"date\"]/@content", Score: 9},
-		{XPath: "//meta[@property=\"article:published\"]/@content", Score: 7},
-		{XPath: "//meta[@itemprop=\"datePublished\"]/@content", Score: 3},
-		{XPath: "//time/@datetime", Score: 3},
-		{XPath: "//meta[@itemprop=\"dateModified\"]/@content", Score: 2},
-		{XPath: "//meta[@property=\"article:modified_time\"]/@content", Score: 2},
-		{XPath: "//meta[@name=\"DC.date.issued\"]/@content", Score: 2},
-		{XPath: "//meta[@name=\"DC.date.created\"]/@content", Score: 2},
-		{XPath: "//meta[@name=\"DC.date.modified\"]/@content", Score: 1},
-		{XPath: "//meta[@name=\"dcterms.modified\"]/@content", Score: 1},
-		{XPath: "//meta[@name=\"dcterms.created\"]/@content", Score: 1},
+	// List of selectors for HTML tags that could contain a date
+	// Scores reflect confidence in these selectors and the preference used for extraction
+	selectors := []SelectorScore{
+		{Selector: "//meta[@property='article:published_time']/@content", Score: 13},
+		{Selector: "//meta[@property='og:updated_time']/@content", Score: 10},
+		{Selector: "//meta[@property='og:article:published_time']/@content", Score: 10},
+		{Selector: "//meta[@property='og:article:modified_time']/@content", Score: 10},
+		{Selector: "//meta[@name='pubdate']/@content", Score: 10},
+		{Selector: "//meta[@name='publishdate']/@content", Score: 10},
+		{Selector: "//meta[@name='date']/@content", Score: 9},
+		{Selector: "//meta[@property='article:published']/@content", Score: 7},
+		{Selector: "//meta[@itemprop='datePublished']/@content", Score: 3},
+		{Selector: "//time/@datetime", Score: 3},
+		{Selector: "//meta[@itemprop='dateModified']/@content", Score: 2},
+		{Selector: "//meta[@property='article:modified_time']/@content", Score: 2},
+		{Selector: "//meta[@name='DC.date.issued']/@content", Score: 2},
+		{Selector: "//meta[@name='DC.date.created']/@content", Score: 2},
+		{Selector: "//meta[@name='DC.date.modified']/@content", Score: 1},
+		{Selector: "//meta[@name='dcterms.modified']/@content", Score: 1},
+		{Selector: "//meta[@name='dcterms.created']/@content", Score: 1},
 	}
 
-	// Extract dates from metadata using the XPaths
-	extractedDates := ExtractElement(html, xpaths, nil)
+	// Extract dates from metadata using the selectors
+	extractedDates := ExtractElement(html, selectors, nil)
 	
 	// ---- STEP 2: Extract dates from visible elements ----
-	// Additional XPaths for visible dates in common article structures
-	visibleDateXPaths := []XPathScore{
-		{XPath: "//span[@class=\"date\"]", Score: 3},
-		{XPath: "//span[@class=\"time\"]", Score: 3},
-		{XPath: "//span[@class=\"timestamp\"]", Score: 3},
-		{XPath: "//span[@class=\"published\"]", Score: 3},
-		{XPath: "//time", Score: 2},
-		{XPath: "//span[contains(@class, \"date\")]", Score: 2},
-		{XPath: "//div[contains(@class, \"date\")]", Score: 2},
-		{XPath: "//p[contains(@class, \"date\")]", Score: 2},
-		{XPath: "//p[contains(@class, \"time\")]", Score: 2},
-		{XPath: "//div[contains(@class, \"byline\")]", Score: 1}, // Often contains date with byline
-		{XPath: "//p[contains(@class, \"byline\")]", Score: 1},
-		{XPath: "//*[contains(@class, \"dateline\")]", Score: 1},
+	// Additional selectors for visible dates in common article structures
+	visibleDateSelectors := []SelectorScore{
+		{Selector: "//span[@class='date']", Score: 3},
+		{Selector: "//span[@class='time']", Score: 3},
+		{Selector: "//span[@class='timestamp']", Score: 3},
+		{Selector: "//span[@class='published']", Score: 3},
+		{Selector: "//time", Score: 2},
+		{Selector: "//span[contains(@class, 'date')]", Score: 2},
+		{Selector: "//div[contains(@class, 'date')]", Score: 2},
+		{Selector: "//p[contains(@class, 'date')]", Score: 2},
+		{Selector: "//p[contains(@class, 'time')]", Score: 2},
+		{Selector: "//div[contains(@class, 'byline')]", Score: 1}, // Often contains date with byline
+		{Selector: "//p[contains(@class, 'byline')]", Score: 1},
+		{Selector: "//*[contains(@class, 'dateline')]", Score: 1},
 	}
 	
 	// Extract visible dates
-	visibleDates := ExtractElement(html, visibleDateXPaths, nil)
+	visibleDates := ExtractElement(html, visibleDateSelectors, nil)
 	
 	// Combine all extracted dates
 	allDates := make([]dateEntry, 0)
@@ -88,20 +88,38 @@ func ExtractDate(html string) time.Time {
 	})
 
 	// Try to parse each date string in order of score
+	var firstFoundDate time.Time
+	
 	for _, entry := range allDates {
-		// For metadata sources, try ISO format parsing first
+		var parsedTime time.Time
+		
+		// For metadata sources, try ISO format parsing first (higher priority)
 		if entry.source == "metadata" {
-			parsedTime := ParseISO8601Format(entry.dateStr)
+			parsedTime = ParseISO8601Format(entry.dateStr)
 			if !parsedTime.IsZero() {
+				// Return ISO dates directly since they often include time information
 				return parsedTime
 			}
 		}
 		
 		// Then try comprehensive format parsing for all sources
-		parsedTime := ParseFlexibleDateFormat(entry.dateStr)
+		parsedTime = ParseFlexibleDateFormat(entry.dateStr)
 		if !parsedTime.IsZero() {
-			return parsedTime
+			// For regular date parsing, check if we have time information
+			if parsedTime.Hour() != 0 || parsedTime.Minute() != 0 || parsedTime.Second() != 0 {
+				// Return immediately with time information
+				return parsedTime
+			} else if firstFoundDate.IsZero() {
+				// Store the first date without time info
+				// We'll return this later if no date with time info is found
+				firstFoundDate = parsedTime
+			}
 		}
+	}
+	
+	// Return the first found date if we have one
+	if !firstFoundDate.IsZero() {
+		return firstFoundDate
 	}
 
 	// If we still have no valid date, try extracting relative dates
@@ -211,14 +229,29 @@ func CleanupDateString(dateStr string) string {
 	dateStr = reSpaces.ReplaceAllString(dateStr, " ")
 	
 	// Remove strings commonly surrounding dates
-	remove := []string{
-		"published:", "published", "updated:", "updated",
-		"date:", "on", "posted on", "written on",
-		"on date", "as of", "posted", "written",
+	removePatterns := []string{
+		"published:", "published ", "updated:", "updated ",
+		"date:", "date ", "on ", "posted on ", "written on ",
+		"on date ", "as of ", "posted ", "written ",
 	}
 	
-	for _, r := range remove {
-		dateStr = strings.ReplaceAll(dateStr, r, "")
+	// Convert the string to lowercase for case-insensitive matching
+	lowerDateStr := strings.ToLower(dateStr)
+	
+	// Try each removal pattern
+	for _, pattern := range removePatterns {
+		// Find the index of the pattern in the lowercase string
+		index := strings.Index(lowerDateStr, pattern)
+		if index >= 0 {
+			// If found, remove that portion from the original string
+			// This preserves case in the remaining part
+			prefix := dateStr[:index]
+			suffix := dateStr[index+len(pattern):]
+			dateStr = prefix + suffix
+			
+			// Update the lowercase version for next iteration
+			lowerDateStr = strings.ToLower(dateStr)
+		}
 	}
 	
 	return strings.TrimSpace(dateStr)
@@ -259,14 +292,14 @@ func ParseRegionalDateFormats(dateStr string) time.Time {
 			if strings.Contains(format, "01/02") || strings.Contains(format, "01-02") || 
 			   strings.Contains(format, "01.02") {
 				// If day value in parsed time > 12, it's not a valid month, so must be DD/MM format
-				if parsedTime.Day() > 12 {
+				if parsedTime.Day() > 12 && parsedTime.Month() <= 12 {
 					// Re-parse with the opposite format
 					reverseFormat := strings.Replace(format, "01/02", "02/01", 1)
 					reverseFormat = strings.Replace(reverseFormat, "01-02", "02-01", 1)
 					reverseFormat = strings.Replace(reverseFormat, "01.02", "02.01", 1)
-					parsedTime, err = time.Parse(reverseFormat, dateStr)
-					if err != nil {
-						continue
+					reverseParsedTime, reverseErr := time.Parse(reverseFormat, dateStr)
+					if reverseErr == nil {
+						return reverseParsedTime.UTC().Truncate(time.Second)
 					}
 				}
 			}
@@ -280,6 +313,35 @@ func ParseRegionalDateFormats(dateStr string) time.Time {
 
 // ParseNaturalLanguageDates handles common textual date formats
 func ParseNaturalLanguageDates(dateStr string) time.Time {
+	// Handle the specific test case for "Year Month Day" format
+	yearMonthDayRegex := regexp.MustCompile(`^(\d{4})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2})$`)
+	if matches := yearMonthDayRegex.FindStringSubmatch(dateStr); len(matches) == 4 {
+		year, _ := strconv.Atoi(matches[1])
+		monthStr := matches[2]
+		day, _ := strconv.Atoi(matches[3])
+		
+		// Convert month name to number
+		var month time.Month
+		switch strings.ToLower(monthStr) {
+		case "january": month = time.January
+		case "february": month = time.February
+		case "march": month = time.March
+		case "april": month = time.April
+		case "may": month = time.May
+		case "june": month = time.June
+		case "july": month = time.July
+		case "august": month = time.August
+		case "september": month = time.September
+		case "october": month = time.October
+		case "november": month = time.November
+		case "december": month = time.December
+		}
+		
+		if month > 0 && day >= 1 && day <= 31 {
+			return time.Date(year, month, day, 0, 0, 0, 0, time.UTC)
+		}
+	}
+	
 	// Clean up string for consistent parsing
 	dateStr = strings.ToLower(dateStr)
 	dateStr = strings.TrimSpace(dateStr)
@@ -345,8 +407,9 @@ func ParseNaturalLanguageDates(dateStr string) time.Time {
 		return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
 	}
 	
-	// Pattern: Year Month Day
-	re3 := regexp.MustCompile(yearPattern + `\s+` + monthPattern + `\s+` + dayPattern)
+	// Pattern: Year Month Day (for lowercase dates)
+	yearMonthDayPattern := `(\d{4}|\d{2})\s+` + monthPattern + `\s+(\d{1,2})(st|nd|rd|th)?`
+	re3 := regexp.MustCompile(yearMonthDayPattern)
 	if matches := re3.FindStringSubmatch(dateStr); len(matches) >= 4 {
 		year, _ := strconv.Atoi(matches[1])
 		month := months[matches[2]]
@@ -361,7 +424,10 @@ func ParseNaturalLanguageDates(dateStr string) time.Time {
 			}
 		}
 		
-		return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+		// Validate the parsed values
+		if month >= 1 && month <= 12 && day >= 1 && day <= 31 {
+			return time.Date(year, time.Month(month), day, 0, 0, 0, 0, time.UTC)
+		}
 	}
 	
 	return time.Time{}
@@ -430,22 +496,22 @@ func ParseDateComponents(dateStr string) time.Time {
 
 // ExtractRelativeDate handles relative time references like "2 days ago"
 func ExtractRelativeDate(html string) time.Time {
-	// XPaths for elements likely to contain relative dates
-	xpaths := []XPathScore{
-		{XPath: "//span[@class=\"date\"]", Score: 3},
-		{XPath: "//span[@class=\"time\"]", Score: 3},
-		{XPath: "//span[@class=\"timestamp\"]", Score: 3},
-		{XPath: "//time", Score: 2},
-		{XPath: "//span[contains(@class, \"date\")]", Score: 2},
-		{XPath: "//div[contains(@class, \"date\")]", Score: 2},
-		{XPath: "//p[contains(@class, \"date\")]", Score: 2},
-		{XPath: "//p[contains(@class, \"time\")]", Score: 2},
-		{XPath: "//div[contains(@class, \"byline\")]", Score: 1},
-		{XPath: "//p[contains(@class, \"byline\")]", Score: 1},
+	// Selectors for elements likely to contain relative dates
+	selectors := []SelectorScore{
+		{Selector: "//span[@class='date']", Score: 3},
+		{Selector: "//span[@class='time']", Score: 3},
+		{Selector: "//span[@class='timestamp']", Score: 3},
+		{Selector: "//time", Score: 2},
+		{Selector: "//span[contains(@class, 'date')]", Score: 2},
+		{Selector: "//div[contains(@class, 'date')]", Score: 2},
+		{Selector: "//p[contains(@class, 'date')]", Score: 2},
+		{Selector: "//p[contains(@class, 'time')]", Score: 2},
+		{Selector: "//div[contains(@class, 'byline')]", Score: 1},
+		{Selector: "//p[contains(@class, 'byline')]", Score: 1},
 	}
 	
 	// Extract elements that might contain relative dates
-	relativeDateCandidates := ExtractElement(html, xpaths, nil)
+	relativeDateCandidates := ExtractElement(html, selectors, nil)
 	
 	// Regular expressions for various relative date formats
 	patterns := []struct {

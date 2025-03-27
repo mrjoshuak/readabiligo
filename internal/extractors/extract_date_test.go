@@ -287,4 +287,9 @@ func TestManualExtractDate(t *testing.T) {
 	if !result.Equal(expected) {
 		t.Errorf("ExtractDate() = %v, want %v", result, expected)
 	}
+	
+	// Check that the full date including time is preserved
+	if result.Hour() != 15 || result.Minute() != 4 || result.Second() != 5 {
+		t.Errorf("Time information was lost: got %v, want hour=15, minute=4, second=5", result)
+	}
 }

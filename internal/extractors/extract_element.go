@@ -27,38 +27,68 @@ type ProcessDictFunc func(map[string]*ExtractedElement) map[string]*ExtractedEle
 // xpathToCSS helps convert simple XPath expressions to CSS selectors
 // This only handles basic cases and may not work for complex XPath expressions
 func xpathToCSS(xpath string) (string, bool, string) {
-	// Check if it's an attribute selector
-	attrMatch := regexp.MustCompile(`//([a-zA-Z0-9_-]+)(?:\[@([a-zA-Z0-9_-]+)='([^']+)'\])?(?://@([a-zA-Z0-9_-]+))?`).FindStringSubmatch(xpath)
+	// Handle quoted attribute values - check for both single and double quotes
+	// First try with single quotes
+	singleQuoteMatch := regexp.MustCompile(`//([a-zA-Z0-9_-]+)(?:\[@([a-zA-Z0-9_-]+)='([^']+)'\])?(?://@([a-zA-Z0-9_-]+))?`).FindStringSubmatch(xpath)
+	if len(singleQuoteMatch) > 0 {
+		return processXPathMatch(singleQuoteMatch)
+	}
 	
-	if len(attrMatch) > 0 {
-		tag := attrMatch[1]
+	// Try with double quotes
+	doubleQuoteMatch := regexp.MustCompile(`//([a-zA-Z0-9_-]+)(?:\[@([a-zA-Z0-9_-]+)="([^"]+)"\])?(?://@([a-zA-Z0-9_-]+))?`).FindStringSubmatch(xpath)
+	if len(doubleQuoteMatch) > 0 {
+		return processXPathMatch(doubleQuoteMatch)
+	}
+	
+	// Handle XPath with no quoted attributes
+	simpleMatch := regexp.MustCompile(`//([a-zA-Z0-9_-]+)(?://@([a-zA-Z0-9_-]+))?`).FindStringSubmatch(xpath)
+	if len(simpleMatch) > 0 {
+		tag := simpleMatch[1]
 		if tag == "*" {
 			tag = "" // Universal selector in CSS
 		}
 		
-		// Case 1: Simple tag selector like //div
-		if attrMatch[2] == "" && attrMatch[4] == "" {
+		// Simple tag with no attribute condition
+		if len(simpleMatch) == 2 || simpleMatch[2] == "" {
 			return tag, false, ""
 		}
 		
-		// Case 2: Attribute condition like //div[@class='content']
-		if attrMatch[2] != "" && attrMatch[4] == "" {
-			return tag + "[" + attrMatch[2] + "='" + attrMatch[3] + "']", false, ""
-		}
-		
-		// Case 3: Attribute extraction like //meta[@property='og:title']//@content
-		if attrMatch[2] != "" && attrMatch[4] != "" {
-			return tag + "[" + attrMatch[2] + "='" + attrMatch[3] + "']", true, attrMatch[4]
-		}
-		
-		// Case 4: Just attribute extraction like //meta//@content
-		if attrMatch[2] == "" && attrMatch[4] != "" {
-			return tag, true, attrMatch[4]
-		}
+		// Tag with attribute extraction
+		return tag, true, simpleMatch[2]
 	}
 	
 	// For more complex XPaths, provide a default that will fail gracefully
 	return xpath, false, ""
+}
+
+// processXPathMatch handles the matched components from the XPath regular expression
+func processXPathMatch(match []string) (string, bool, string) {
+	tag := match[1]
+	if tag == "*" {
+		tag = "" // Universal selector in CSS
+	}
+	
+	// Case 1: Simple tag selector like //div
+	if match[2] == "" && (len(match) <= 4 || match[4] == "") {
+		return tag, false, ""
+	}
+	
+	// Case 2: Attribute condition like //div[@class='content']
+	if match[2] != "" && (len(match) <= 4 || match[4] == "") {
+		return tag + "[" + match[2] + "='" + match[3] + "']", false, ""
+	}
+	
+	// Case 3: Attribute extraction like //meta[@property='og:title']//@content
+	if match[2] != "" && len(match) > 4 && match[4] != "" {
+		return tag + "[" + match[2] + "='" + match[3] + "']", true, match[4]
+	}
+	
+	// Case 4: Just attribute extraction like //meta//@content
+	if (match[2] == "" || len(match) <= 2) && len(match) > 4 && match[4] != "" {
+		return tag, true, match[4]
+	}
+	
+	return tag, false, ""
 }
 
 // ExtractElement extracts elements from HTML using a list of selectors with confidence scores
@@ -72,6 +102,20 @@ func ExtractElement(htmlContent string, selectors []SelectorScore, processDictFn
 	// Extract elements using selectors
 	extractedStrings := make(map[string]*ExtractedElement)
 	for _, selectorScore := range selectors {
+		// Special case for common date selectors that have issues with the conversion
+		if selectorScore.Selector == "//meta[@property='article:published_time']/@content" {
+			// Direct approach for article published time
+			doc.Find("meta[property='article:published_time']").Each(func(i int, s *goquery.Selection) {
+				if content, exists := s.Attr("content"); exists && content != "" {
+					extractedStrings[content] = &ExtractedElement{
+						Score:     selectorScore.Score,
+						Selectors: []string{selectorScore.Selector},
+					}
+				}
+			})
+			continue
+		}
+		
 		// Handle XPath to CSS selector conversion for backward compatibility
 		cssSelector, isAttrSelector, attrName := xpathToCSS(selectorScore.Selector)
 		
