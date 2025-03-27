@@ -1,0 +1,19 @@
+{
+  "title": "Test Page",
+  "byline": "",
+  "date": "0001-01-01T00:00:00Z",
+  "content": "<h1>Example Domain</h1><p>This domain is for use in illustrative examples in documents.</p>",
+  "plain_content": "<h1>Example Domain</h1><p>This domain is for use in illustrative examples in documents.</p>",
+  "plain_text": [
+    {
+      "text": "Example Domain",
+      "node_index": "",
+      "content_digest": ""
+    },
+    {
+      "text": "This domain is for use in illustrative examples in documents.",
+      "node_index": "",
+      "content_digest": ""
+    }
+  ]
+}

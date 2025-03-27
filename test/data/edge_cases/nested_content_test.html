@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deeply Nested Content Structure Test</title>
+    <meta name="description" content="Test case for extracting content from deeply nested divs">
+</head>
+<body>
+    <div class="wrapper">
+        <div class="container">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="header-container">
+                        <div class="site-header">
+                            <div class="logo-container">
+                                <a href="/" class="logo">Website Name</a>
+                            </div>
+                            <div class="menu-container">
+                                <nav class="main-nav">
+                                    <ul>
+                                        <li><a href="/">Home</a></li>
+                                        <li><a href="/about">About</a></li>
+                                        <li><a href="/contact">Contact</a></li>
+                                    </ul>
+                                </nav>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row content-row">
+                <div class="col-md-8">
+                    <div class="main-content-wrapper">
+                        <div class="article-container">
+                            <div class="article-header">
+                                <div class="article-title-container">
+                                    <h1 class="article-title">Deeply Nested Content Article</h1>
+                                </div>
+                                <div class="article-meta">
+                                    <div class="author-info">
+                                        <span class="byline">By Jane Doe</span>
+                                    </div>
+                                    <div class="publish-date">
+                                        <time datetime="2025-03-27">March 27, 2025</time>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="article-body">
+                                <div class="article-section">
+                                    <div class="paragraph-container">
+                                        <p>This is the first paragraph of content in a deeply nested structure. The content extractor should be able to find this despite the excessive div nesting.</p>
+                                    </div>
+                                    
+                                    <div class="paragraph-container">
+                                        <p>This is the second paragraph with additional content. Modern web frameworks and components often create deeply nested DOM structures like this.</p>
+                                    </div>
+                                    
+                                    <div class="subsection-container">
+                                        <div class="subsection-header">
+                                            <h2 class="subsection-title">Sub-heading Within Nested Content</h2>
+                                        </div>
+                                        <div class="subsection-content">
+                                            <div class="paragraph-container">
+                                                <p>This subsection has even more deeply nested content. The nesting depth here is extreme but not uncommon in modern websites built with multiple layers of components.</p>
+                                            </div>
+                                            
+                                            <div class="list-container">
+                                                <ul class="nested-list">
+                                                    <li class="list-item">
+                                                        <div class="list-content">First item in a nested list</div>
+                                                    </li>
+                                                    <li class="list-item">
+                                                        <div class="list-content">Second item with <strong>formatted</strong> text</div>
+                                                    </li>
+                                                    <li class="list-item">
+                                                        <div class="list-content">Third item in the list</div>
+                                                    </li>
+                                                </ul>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="image-container">
+                                        <figure class="article-figure">
+                                            <div class="image-wrapper">
+                                                <img src="placeholder.jpg" alt="Placeholder" class="article-image">
+                                            </div>
+                                            <figcaption class="image-caption">
+                                                <div class="caption-text">Figure 1: A deeply nested image with caption</div>
+                                            </figcaption>
+                                        </figure>
+                                    </div>
+                                    
+                                    <div class="paragraph-container">
+                                        <p>The article continues after the image with more content that should be extracted.</p>
+                                    </div>
+                                    
+                                    <div class="quote-container">
+                                        <blockquote class="article-quote">
+                                            <div class="quote-content">
+                                                <p>This is a blockquote within the deeply nested structure. It should be preserved in the extraction.</p>
+                                            </div>
+                                            <div class="quote-attribution">
+                                                <cite>— Source Name</cite>
+                                            </div>
+                                        </blockquote>
+                                    </div>
+                                    
+                                    <div class="paragraph-container">
+                                        <p>Final paragraph of the main content section before the nested footer.</p>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="article-footer">
+                                <div class="tags-container">
+                                    <div class="tags-list">
+                                        <span class="tag">Tag1</span>
+                                        <span class="tag">Tag2</span>
+                                        <span class="tag">Tag3</span>
+                                    </div>
+                                </div>
+                                <div class="sharing-container">
+                                    <div class="share-buttons">
+                                        <a href="#" class="share-button">Share</a>
+                                        <a href="#" class="share-button">Tweet</a>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="related-content">
+                            <div class="related-header">
+                                <h3 class="related-title">Related Articles</h3>
+                            </div>
+                            <div class="related-items">
+                                <div class="related-item">
+                                    <a href="/article1">Related Article 1</a>
+                                </div>
+                                <div class="related-item">
+                                    <a href="/article2">Related Article 2</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="col-md-4">
+                    <div class="sidebar-wrapper">
+                        <div class="sidebar-container">
+                            <div class="widget">
+                                <div class="widget-header">
+                                    <h3 class="widget-title">Popular Posts</h3>
+                                </div>
+                                <div class="widget-content">
+                                    <ul class="popular-posts">
+                                        <li><a href="#">Popular Post 1</a></li>
+                                        <li><a href="#">Popular Post 2</a></li>
+                                        <li><a href="#">Popular Post 3</a></li>
+                                    </ul>
+                                </div>
+                            </div>
+                            
+                            <div class="widget">
+                                <div class="widget-header">
+                                    <h3 class="widget-title">Newsletter</h3>
+                                </div>
+                                <div class="widget-content">
+                                    <form class="newsletter-form">
+                                        <input type="email" placeholder="Your email">
+                                        <button type="submit">Subscribe</button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="footer-container">
+                        <div class="site-footer">
+                            <div class="footer-content">
+                                <div class="footer-logo">
+                                    <a href="/">Website Name</a>
+                                </div>
+                                <div class="footer-links">
+                                    <ul>
+                                        <li><a href="/about">About</a></li>
+                                        <li><a href="/privacy">Privacy</a></li>
+                                        <li><a href="/terms">Terms</a></li>
+                                    </ul>
+                                </div>
+                                <div class="footer-copyright">
+                                    <p>© 2025 Example Corp. All rights reserved.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Important link in deep nesting -->
+            <div class="pagination-container">
+                <div class="pagination-wrapper">
+                    <div class="pagination-next">
+                        <a href="/page2" class="next-link">Continue Reading - Part 2</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

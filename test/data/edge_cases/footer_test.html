@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Footer Edge Case Test</title>
+</head>
+<body>
+    <article>
+        <h1>Main Article Title</h1>
+        <p>This is the main content of the article. It should be extracted properly.</p>
+        <p>This is a second paragraph with some more content.</p>
+        
+        <!-- Standard semantic footer -->
+        <footer>
+            <p>This is a standard semantic footer that should be removed.</p>
+            <p>Copyright 2025. All rights reserved.</p>
+        </footer>
+    </article>
+
+    <div class="main-content">
+        <h2>Secondary Content</h2>
+        <p>This is another section of the page with content that should be extracted.</p>
+        
+        <!-- Footer with class name -->
+        <div class="footer">
+            <p>This is a div with class="footer" that should be removed.</p>
+            <p>Contact us at example@example.com</p>
+        </div>
+    </div>
+
+    <!-- Nested footer with important link -->
+    <div class="content-section">
+        <p>This final section also has important content.</p>
+        <div class="site-footer">
+            <p>This is a nested footer with a class that includes "footer".</p>
+            <p>Site map | Terms | Privacy</p>
+            <a href="/more">Read more about this topic</a>
+        </div>
+    </div>
+
+    <!-- Footer with non-obvious naming but footer-like content -->
+    <div class="bottom-section">
+        <p>This appears to be content but is actually footer-like.</p>
+        <div class="copyright">© 2025 Example Corp</div>
+        <ul class="site-links">
+            <li><a href="/about">About</a></li>
+            <li><a href="/terms">Terms</a></li>
+            <li><a href="/privacy">Privacy</a></li>
+        </ul>
+    </div>
+
+    <!-- Footer with mixed content including important link -->
+    <div id="footer">
+        <p>This is a div with id="footer" containing a mix of footer content and important links.</p>
+        <p>Legal disclaimer and copyright notices.</p>
+        <div class="important-links">
+            <a href="/related">More information about this topic</a>
+            <a href="/continue">Continue reading in part 2</a>
+        </div>
+    </div>
+</body>
+</html>

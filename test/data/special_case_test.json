@@ -1,0 +1,24 @@
+{
+  "title": "Example Domain",
+  "byline": "",
+  "date": "0001-01-01T00:00:00Z",
+  "content": "<h1>Example Domain</h1><p>This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission.</p><p><a href=\"https://www.iana.org/domains/example\">More information...</a></p>",
+  "plain_content": "<h1>Example Domain</h1><p>This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission.</p><p><a href=\"https://www.iana.org/domains/example\">More information...</a></p>",
+  "plain_text": [
+    {
+      "text": "Example Domain",
+      "node_index": "",
+      "content_digest": ""
+    },
+    {
+      "text": "This domain is for use in illustrative examples in documents. You may use this domain in literature without prior coordination or asking for permission.",
+      "node_index": "",
+      "content_digest": ""
+    },
+    {
+      "text": "More information...",
+      "node_index": "",
+      "content_digest": ""
+    }
+  ]
+}

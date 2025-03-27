@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Table-Based Layout Edge Case Test</title>
+</head>
+<body>
+    <!-- Old-style table-based layout -->
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+        <tr>
+            <td colspan="3">
+                <h1>Table-Based Layout Article</h1>
+                <p class="byline">By John Smith | January 15, 2025</p>
+            </td>
+        </tr>
+        <tr>
+            <!-- Left navigation sidebar -->
+            <td width="20%" valign="top">
+                <table class="nav-table">
+                    <tr><td><a href="/">Home</a></td></tr>
+                    <tr><td><a href="/news">News</a></td></tr>
+                    <tr><td><a href="/about">About</a></td></tr>
+                    <tr><td><a href="/contact">Contact</a></td></tr>
+                </table>
+            </td>
+            
+            <!-- Main content area -->
+            <td width="60%" valign="top">
+                <table class="content-table">
+                    <tr>
+                        <td>
+                            <p>This is the main content of the article formatted in an old-school table layout. The content should be extracted properly despite being deeply nested in tables.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <p>Table-based layouts were common in the early days of the web before CSS became widely supported. Many legacy systems and older websites still use this approach.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <h2>Article Subsection</h2>
+                            <p>Here is a subsection of the article with more content to extract.</p>
+                            <p>The content extraction should identify this as relevant content despite the table structure.</p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <img src="placeholder.jpg" alt="Placeholder image" width="400" height="300">
+                            <p class="caption">Figure 1: An image caption that should be preserved with the content.</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+            
+            <!-- Right sidebar with ads and related content -->
+            <td width="20%" valign="top">
+                <table class="sidebar-table">
+                    <tr>
+                        <td>
+                            <div class="ad">
+                                <p>Advertisement</p>
+                                <img src="ad.jpg" alt="Advertisement" width="120" height="60">
+                            </div>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td>
+                            <h3>Related Articles</h3>
+                            <ul>
+                                <li><a href="/article1">Related Article 1</a></li>
+                                <li><a href="/article2">Related Article 2</a></li>
+                                <li><a href="/article3">Related Article 3</a></li>
+                            </ul>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+        <tr>
+            <!-- Footer spanning all columns -->
+            <td colspan="3">
+                <table class="footer-table">
+                    <tr>
+                        <td>
+                            <p>Copyright © 2025 Example Company. All rights reserved.</p>
+                            <p>Terms of Service | Privacy Policy | Contact Us</p>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+    </table>
+
+    <!-- Data table within content that should be preserved -->
+    <table width="80%" border="1" cellspacing="0" cellpadding="5" class="data-table">
+        <caption>Table 1: Sample Data Table That Should Be Preserved</caption>
+        <thead>
+            <tr>
+                <th>Product</th>
+                <th>Price</th>
+                <th>Available</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td>Product A</td>
+                <td>$29.99</td>
+                <td>Yes</td>
+            </tr>
+            <tr>
+                <td>Product B</td>
+                <td>$19.99</td>
+                <td>No</td>
+            </tr>
+            <tr>
+                <td>Product C</td>
+                <td>$39.99</td>
+                <td>Yes</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <p>The article continues after the data table with additional information.</p>
+</body>
+</html>

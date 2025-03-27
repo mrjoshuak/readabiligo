@@ -1,0 +1,24 @@
+{
+  "title": "Test Page",
+  "byline": "",
+  "date": "0001-01-01T00:00:00Z",
+  "content": "<h1>Main Content</h1><p>This is the main content of the page.</p><a href=\"https://example.com/important-link\">Important Link</a>",
+  "plain_content": "<h1>Main Content</h1><p>This is the main content of the page.</p><p><a href=\"https://example.com/important-link\">Important Link</a></p>",
+  "plain_text": [
+    {
+      "text": "Main Content",
+      "node_index": "",
+      "content_digest": ""
+    },
+    {
+      "text": "This is the main content of the page.",
+      "node_index": "",
+      "content_digest": ""
+    },
+    {
+      "text": "Important Link",
+      "node_index": "",
+      "content_digest": ""
+    }
+  ]
+}
