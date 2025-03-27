@@ -9,6 +9,7 @@ import (
 
 	"github.com/mrjoshuak/readabiligo/internal/extractors"
 	"github.com/mrjoshuak/readabiligo/internal/javascript"
+	"github.com/mrjoshuak/readabiligo/internal/readability"
 	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
 	"github.com/mrjoshuak/readabiligo/types"
 )
@@ -192,40 +193,8 @@ func (e *articleExtractor) ExtractFromReader(r io.Reader, options *types.Extract
 // extractUsingPureGo implements the pure Go extraction logic.
 // This is used when Readability.js is not available or when explicitly requested.
 func (e *articleExtractor) extractUsingPureGo(html string, options *types.ExtractionOptions) (*types.Article, error) {
-	// Initialize the article with empty values
-	article := &types.Article{
-		Title:        "",
-		Byline:       "",
-		Date:         time.Time{},
-		Content:      "",
-		PlainContent: "",
-		PlainText:    []types.Block{},
-	}
-
-	// Extract title
-	article.Title = extractors.ExtractTitle(html)
-
-	// Extract date
-	article.Date = extractors.ExtractDate(html)
-
-	// Extract content using the HTML simplifier
-	simpleTree, err := simplifiers.SimpleTreeFromHTMLString(html)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create simple tree: %w", err)
-	}
-	article.Content = simpleTree.String()
-
-	// Generate plain content with content digests and node indexes if requested
-	plainContent, err := simplifiers.PlainContent(article.Content, options.ContentDigests, options.NodeIndexes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate plain content: %w", err)
-	}
-	article.PlainContent = plainContent
-
-	// Extract plain text blocks
-	article.PlainText = extractors.ExtractTextBlocks(article.PlainContent, false)
-
-	return article, nil
+	// Use our pure Go Readability implementation
+	return readability.ExtractFromHTML(html, options)
 }
 
 // New creates a new Extractor instance with the provided options.
