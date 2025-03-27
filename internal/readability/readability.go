@@ -6,10 +6,12 @@ import (
 	"net/url"
 	"regexp"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/PuerkitoBio/goquery"
+	"golang.org/x/net/html"
 )
 
 // ReadabilityOptions defines configuration options for the Readability parser
@@ -60,6 +62,16 @@ type Readability struct {
 	articleSiteName  string            // Site name
 	attempts         []int             // Extraction attempts
 	flags            int               // Flags controlling the algorithm
+}
+
+// createElement is a helper function that creates an element with the given tag name
+// This is a workaround for the non-existent CreateElement method in goquery.Document
+func (r *Readability) createElement(tagName string) *goquery.Selection {
+	node := &html.Node{
+		Type: html.ElementNode,
+		Data: tagName,
+	}
+	return goquery.NewDocumentFromNode(node).Find(tagName)
 }
 
 // NodeInfo holds information about a node
@@ -501,7 +513,7 @@ func (r *Readability) replaceBrs(elem *goquery.Selection) {
 
 		// If we removed a <br> chain, replace the remaining <br> with a <p>
 		if replaced {
-			p := r.doc.CreateElement("p")
+			p := r.createElement("p")
 			br.ReplaceWithSelection(p)
 
 			// Move all siblings until the next <br><br> into the new paragraph
@@ -619,7 +631,7 @@ func (r *Readability) fixRelativeUris(articleContent *goquery.Selection) {
 				link.ReplaceWithHtml(link.Text())
 			} else {
 				// Replace with a <span> to preserve children
-				span := r.doc.CreateElement("span")
+				span := r.createElement("span")
 				link.ReplaceWithSelection(span)
 				link.Children().Each(func(i int, child *goquery.Selection) {
 					span.AppendSelection(child)
@@ -1093,7 +1105,7 @@ func (r *Readability) grabArticleNode() *goquery.Selection {
 	}
 
 	// Create a new article element
-	article := r.doc.CreateElement("div")
+	article := r.createElement("div")
 	article.SetAttr("id", "readability-content")
 
 	// Get the siblings of the top candidate
@@ -1347,7 +1359,7 @@ func (r *Readability) fixLazyImages(root *goquery.Selection) {
 	root.Find("img, picture, figure").Each(func(i int, elem *goquery.Selection) {
 		// Check for lazy-loaded images
 		src, hasSrc := elem.Attr("src")
-		srcset, hasSrcset := elem.Attr("srcset")
+		_, hasSrcset := elem.Attr("srcset")
 		className, _ := elem.Attr("class")
 
 		// Skip non-lazy images
@@ -1485,7 +1497,7 @@ func (r *Readability) cleanConditionally(e *goquery.Selection, tag string) {
 
 		// Calculate weight and content score
 		weight := getClassWeight(node)
-		contentScore := 0.0
+		_ = 0.0 // contentScore placeholder
 
 		// Check if it has enough commas
 		if getCharCount(node, ",") < 10 {
@@ -1550,7 +1562,7 @@ func (r *Readability) cleanConditionally(e *goquery.Selection, tag string) {
 			// Decision logic for removing the node
 			shouldRemove := (img > 1 && float64(p)/float64(img) < 0.5 && !hasAncestorTag(node, "figure", 3, nil)) ||
 				(!isList && li > p) ||
-				(input > math.Floor(float64(p)/3)) ||
+				(float64(input) > math.Floor(float64(p)/3)) ||
 				(!isList && headingDensity < 0.9 && contentLength < 25 && (img == 0 || img > 2) && !hasAncestorTag(node, "figure", 3, nil)) ||
 				(!isList && weight < 25 && linkDensity > 0.2) ||
 				(weight >= 25 && linkDensity > 0.5) ||

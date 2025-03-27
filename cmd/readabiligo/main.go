@@ -13,8 +13,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mrjoshuak/readabiligo/extractor"
-	"github.com/mrjoshuak/readabiligo/types"
+	"github.com/mrjoshuak/readabiligo"
 )
 
 // OutputFormat represents the supported output formats for the extracted content.
@@ -33,7 +32,7 @@ func main() {
 	outputDir := flag.String("output-dir", "", "Output directory for batch processing (default: same as input)")
 	outputFile := flag.String("output", "", "Output file path (default: stdout)")
 	formatStr := flag.String("format", "json", "Output format: json, html, or text")
-	useReadability := flag.Bool("readability", true, "Use Readability.js if available")
+	useReadability := flag.Bool("js", false, "DEPRECATED: Use JavaScript implementation instead of pure Go")
 	contentDigests := flag.Bool("digests", false, "Add content digest attributes")
 	nodeIndexes := flag.Bool("indexes", false, "Add node index attributes")
 	compact := flag.Bool("compact", false, "Output compact JSON without indentation")
@@ -65,7 +64,7 @@ func main() {
 
 	// Show version information if requested
 	if *showVersion {
-		fmt.Printf("ReadabiliGo version %s\n", types.Version)
+		fmt.Printf("ReadabiliGo version %s\n", readabiligo.Version)
 		os.Exit(0)
 	}
 
@@ -86,12 +85,17 @@ func main() {
 		inputs = strings.Split(*inputFiles, ",")
 	}
 
+	// Check for deprecated flag
+	if *useReadability {
+		fmt.Println("Warning: The -js flag is deprecated and may be removed in a future version.")
+	}
+
 	// Create the extractor with options
-	ext := extractor.New(
-		extractor.WithReadability(*useReadability),
-		extractor.WithContentDigests(*contentDigests),
-		extractor.WithNodeIndexes(*nodeIndexes),
-		extractor.WithTimeout(*timeout),
+	ext := readabiligo.New(
+		readabiligo.WithReadability(*useReadability),
+		readabiligo.WithContentDigests(*contentDigests),
+		readabiligo.WithNodeIndexes(*nodeIndexes),
+		readabiligo.WithTimeout(*timeout),
 	)
 
 	// Process each input file

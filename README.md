@@ -30,6 +30,12 @@ go install github.com/mrjoshuak/readabiligo/cmd/readabiligo@latest
 go get github.com/mrjoshuak/readabiligo
 ```
 
+This will install the latest version of the library, which can be imported directly:
+
+```go
+import "github.com/mrjoshuak/readabiligo"
+```
+
 ## Command-Line Usage
 
 The `readabiligo` command-line tool can extract articles from HTML files or standard input.
@@ -107,12 +113,12 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/mrjoshuak/readabiligo"
 )
 
 func main() {
 	// Create a new extractor
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Open an HTML file
 	file, err := os.Open("article.html")
@@ -148,15 +154,15 @@ import (
 	"os"
 	"time"
 
-	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/mrjoshuak/readabiligo"
 )
 
 func main() {
 	// Create a new extractor with custom options
-	ext := extractor.New(
-		extractor.WithContentDigests(true),    // Add content digest attributes
-		extractor.WithNodeIndexes(true),       // Add node index attributes
-		extractor.WithTimeout(time.Second*60), // Set a 60-second timeout
+	ext := readabiligo.New(
+		readabiligo.WithContentDigests(true),    // Add content digest attributes
+		readabiligo.WithNodeIndexes(true),       // Add node index attributes
+		readabiligo.WithTimeout(time.Second*60), // Set a 60-second timeout
 	)
 
 	// Extract from an HTML string
@@ -179,6 +185,8 @@ func main() {
 	}
 }
 ```
+
+> **Note**: For backward compatibility, the library can still be imported from `github.com/mrjoshuak/readabiligo/extractor` as in previous versions.
 
 ## Output Format
 

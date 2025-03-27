@@ -15,6 +15,7 @@ package readability
 import (
 	"time"
 
+	"github.com/PuerkitoBio/goquery"
 	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
 	"github.com/mrjoshuak/readabiligo/types"
 )
