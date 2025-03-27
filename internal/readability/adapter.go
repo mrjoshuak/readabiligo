@@ -13,7 +13,7 @@
 package readability
 
 import (
-	"time"
+	"fmt"
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
@@ -23,31 +23,37 @@ import (
 // ExtractFromHTML extracts readable content from HTML using pure Go Readability
 // This function adapts our implementation to match the expected interface
 func ExtractFromHTML(html string, options *types.ExtractionOptions) (*types.Article, error) {
+	// Set options for Readability parser
+	opts := defaultReadabilityOptions()
+	if options != nil {
+		// Apply relevant options from the extraction options
+		if options.PreserveImportantLinks {
+			opts.PreserveImportantLinks = true
+		}
+		
+		// Apply content type detection options
+		opts.DetectContentType = options.DetectContentType
+		opts.ContentType = ContentType(options.ContentType)
+		
+		// Add any other option mappings here in the future
+	}
+
 	// Parse HTML using Readability algorithm
-	article, err := Parse(html)
+	readabilityArticle, err := ParseHTML(html, &opts)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to parse HTML content: %w", err)
 	}
 
-	// Create the article structure
-	result := &types.Article{
-		Title:        article.Title,
-		Byline:       article.Byline,
-		Date:         article.Date,
-		Content:      article.Content,
-		PlainContent: "",
-		PlainText:    []types.Block{},
-	}
-
-	// Set default date if needed
-	if result.Date.IsZero() {
-		result.Date = time.Now()
-	}
+	// Convert to standard article format
+	result := readabilityArticle.ToStandardArticle()
+	
+	// Set the detected content type in the result
+	result.ContentType = types.ContentType(readabilityArticle.ContentType)
 
 	// Generate plain content with content digests and node indexes if requested
-	plainContent, err := simplifiers.PlainContent(article.Content, options.ContentDigests, options.NodeIndexes)
+	plainContent, err := simplifiers.PlainContent(result.Content, options.ContentDigests, options.NodeIndexes)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate plain content: %w", err)
 	}
 	result.PlainContent = plainContent
 
@@ -55,6 +61,33 @@ func ExtractFromHTML(html string, options *types.ExtractionOptions) (*types.Arti
 	result.PlainText = extractTextBlocks(result.PlainContent)
 
 	return result, nil
+}
+
+// ParseHTML parses HTML content and returns a ReadabilityArticle
+func ParseHTML(html string, opts *ReadabilityOptions) (*ReadabilityArticle, error) {
+	r, err := NewFromHTML(html, opts)
+	if err != nil {
+		return nil, err
+	}
+	
+	return r.Parse()
+}
+
+// ToStandardArticle converts a ReadabilityArticle to the standard Article type
+func (ra *ReadabilityArticle) ToStandardArticle() *types.Article {
+	article := &types.Article{
+		Title:        ra.Title,
+		Byline:       ra.Byline,
+		Content:      ra.Content,
+		ContentType:  types.ContentType(ra.ContentType),
+	}
+	
+	// Set publication date if available
+	if !ra.Date.IsZero() {
+		article.Date = ra.Date
+	}
+	
+	return article
 }
 
 // extractTextBlocks creates a slice of Block objects from HTML content

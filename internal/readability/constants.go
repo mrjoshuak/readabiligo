@@ -33,6 +33,106 @@ const (
 	DefaultCharThreshold = 500
 )
 
+// Scoring constants for content extraction
+const (
+	// BaseContentScore is the starting score for content elements
+	BaseContentScore = 1.0
+
+	// CommaBonus is the score bonus per comma found in content
+	CommaBonus = 1.0
+
+	// MaxLengthBonus is the maximum bonus for text length
+	MaxLengthBonus = 3.0
+
+	// TextLengthDivisor is the value by which text length is divided to calculate the bonus
+	TextLengthDivisor = 100.0
+
+	// MinContentTextLength is minimum text length required for a node to be considered content
+	MinContentTextLength = 25
+
+	// SiblingScoreMultiplier is multiplier for calculating sibling score threshold
+	SiblingScoreMultiplier = 0.2
+
+	// MinimumSiblingScoreThreshold is the minimum threshold for sibling scores when topCandidate has no score
+	MinimumSiblingScoreThreshold = 10.0
+
+	// SameClassSiblingBonus is the bonus for siblings with the same class as the top candidate
+	SameClassSiblingBonus = 0.2
+
+	// MinParagraphLength is the minimum length for a paragraph to be included
+	MinParagraphLength = 80
+
+	// MaxShortParagraphLength is the maximum length for a short paragraph that can be included if it has specific qualities
+	MaxShortParagraphLength = 80
+
+	// ParagraphLinkDensityThreshold is the maximum allowed link density for paragraphs to be included
+	ParagraphLinkDensityThreshold = 0.25
+)
+
+// Cleanup and conditional removal constants
+const (
+	// MinCommaCount is the minimum number of commas needed for a node to pass the comma test in conditional cleaning
+	MinCommaCount = 10
+
+	// MinEmbedContentLength is the minimum content length for a node with a single embed to be kept
+	MinEmbedContentLength = 75
+
+	// TitleSimilarityThreshold is the threshold for determining if a heading is similar to the article title
+	TitleSimilarityThreshold = 0.75
+
+	// ListLinkDensityThreshold is the maximum ratio of link text to total text for lists to be considered content
+	ListLinkDensityThreshold = 0.5
+
+	// ConditionalLinkDensityThresholdLow is link density threshold for nodes with low weight
+	ConditionalLinkDensityThresholdLow = 0.2
+
+	// ConditionalLinkDensityThresholdHigh is link density threshold for nodes with high weight
+	ConditionalLinkDensityThresholdHigh = 0.5
+
+	// ConditionalWeightThresholdLow is the low weight threshold for conditional cleaning
+	ConditionalWeightThresholdLow = 25
+
+	// HeadingDensityThreshold is the maximum ratio of heading text to total text
+	HeadingDensityThreshold = 0.9
+
+	// DataTableMinRows is the minimum number of rows for a table to be considered a data table
+	DataTableMinRows = 10
+
+	// DataTableMinColumns is the minimum number of columns for a table to be considered a data table
+	DataTableMinColumns = 4
+
+	// DataTableMinCells is the minimum number of cells for a table to be considered a data table
+	DataTableMinCells = 10
+)
+
+// Node scoring constants
+const (
+	// Initial scores based on tag name
+	DivInitialScore          = 5.0
+	BlockquoteInitialScore   = 3.0
+	NegativeListInitialScore = -3.0
+	HeadingInitialScore      = -5.0
+
+	// Class weight adjustments
+	ClassWeightNegative = -25
+	ClassWeightPositive = 25
+)
+
+// Ancestor scoring constants
+const (
+	// AncestorLevelDepth is the max depth for getting node ancestors
+	AncestorLevelDepth = 5
+
+	// AncestorScoreDividerL0 is the score divider for level 0 ancestors
+	AncestorScoreDividerL0 = 1.0
+
+	// AncestorScoreDividerL1 is the score divider for level 1 ancestors
+	AncestorScoreDividerL1 = 2.0
+
+	// AncestorScoreDividerMultiplier is the multiplier for levels > 1
+	AncestorScoreDividerMultiplier = 3.0
+)
+
 // DefaultTagsToScore defines the element tags that should be scored
 var DefaultTagsToScore = []string{"SECTION", "H2", "H3", "H4", "H5", "H6", "P", "TD", "PRE"}
 
@@ -75,7 +175,7 @@ var HTMLEscapeMap = map[string]string{
 // Regular expressions used in the Readability algorithm
 var (
 	// Unlikely candidates for content
-	RegexpUnlikelyCandidates = regexp.MustCompile(`-ad-|ai2html|banner|breadcrumbs|combx|comment|community|cover-wrap|disqus|extra|footer|gdpr|header|legends|menu|related|remark|replies|rss|shoutbox|sidebar|skyscraper|social|sponsor|supplemental|ad-break|agegate|pagination|pager|popup|yom-remote`)
+	RegexpUnlikelyCandidates = regexp.MustCompile(`-ad-|ai2html|banner|breadcrumbs|combx|comment|community|cover-wrap|disqus|extra|footer|gdpr|header|legends|menu|nav|navigation|related|remark|replies|rss|shoutbox|sidebar|skyscraper|social|sponsor|supplemental|ad-break|agegate|pagination|pager|popup|yom-remote`)
 
 	// Candidates that might be content despite matching the unlikelyCandidates pattern
 	RegexpMaybeCandidate = regexp.MustCompile(`and|article|body|column|content|main|shadow`)
@@ -83,8 +183,8 @@ var (
 	// Positive indicators of content
 	RegexpPositive = regexp.MustCompile(`article|body|content|entry|hentry|h-entry|main|page|pagination|post|text|blog|story`)
 
-	// Negative indicators of content
-	RegexpNegative = regexp.MustCompile(`-ad-|hidden|^hid$| hid$| hid |^hid |banner|combx|comment|com-|contact|foot|footer|footnote|gdpr|masthead|media|meta|outbrain|promo|related|scroll|share|shoutbox|sidebar|skyscraper|sponsor|shopping|tags|tool|widget`)
+	// Negative indicators of content - adjusted to be consistent with Readability.js
+	RegexpNegative = regexp.MustCompile(`-ad-|hidden|^hid$| hid$| hid |^hid |banner|combx|comment|com-|contact|footer|gdpr|masthead|media|meta|outbrain|promo|related|scroll|share|shoutbox|sidebar|skyscraper|sponsor|shopping|tags|widget`)
 
 	// Extraneous content areas
 	RegexpExtraneous = regexp.MustCompile(`print|archive|comment|discuss|e[\-]?mail|share|reply|all|login|sign|single|utility`)

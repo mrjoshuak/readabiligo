@@ -3,7 +3,7 @@ package types
 
 // Version information for the ReadabiliGo library.
 const (
-	Version = "0.2.0"
+	Version = "0.3.0" // Updated version for JavaScript bridge removal
 	Name    = "ReadabiliGo"
 )
 

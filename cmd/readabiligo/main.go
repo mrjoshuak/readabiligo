@@ -32,7 +32,7 @@ func main() {
 	outputDir := flag.String("output-dir", "", "Output directory for batch processing (default: same as input)")
 	outputFile := flag.String("output", "", "Output file path (default: stdout)")
 	formatStr := flag.String("format", "json", "Output format: json, html, or text")
-	useReadability := flag.Bool("js", false, "DEPRECATED: Use JavaScript implementation instead of pure Go")
+	useReadability := flag.Bool("js", false, "DEPRECATED: No effect - JavaScript implementation has been removed")
 	contentDigests := flag.Bool("digests", false, "Add content digest attributes")
 	nodeIndexes := flag.Bool("indexes", false, "Add node index attributes")
 	compact := flag.Bool("compact", false, "Output compact JSON without indentation")
@@ -87,7 +87,7 @@ func main() {
 
 	// Check for deprecated flag
 	if *useReadability {
-		fmt.Println("Warning: The -js flag is deprecated and may be removed in a future version.")
+		fmt.Println("Warning: The -js flag is deprecated and has no effect. The JavaScript implementation has been removed and only the pure Go implementation is available.")
 	}
 
 	// Create the extractor with options

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/stretchr/testify/assert"
 )
 
 // TestRealWorldExamples tests article extraction from real-world HTML examples
@@ -96,12 +97,11 @@ func TestRealWorldExamples(t *testing.T) {
 	}
 }
 
-// TestCompareRealWorldWithReadability tests article extraction from real-world HTML examples
-// using both the default extractor and the Readability.js-based extractor
-func TestCompareRealWorldWithReadability(t *testing.T) {
+// TestMultipleExtractionOptions tests article extraction with different options
+func TestMultipleExtractionOptions(t *testing.T) {
 	// Skip this test if running in short mode
 	if testing.Short() {
-		t.Skip("Skipping real-world comparison test in short mode")
+		t.Skip("Skipping options comparison test in short mode")
 	}
 
 	// Get the list of HTML files in the real_world directory
@@ -118,10 +118,10 @@ func TestCompareRealWorldWithReadability(t *testing.T) {
 		return
 	}
 
-	// Create the extractors
+	// Create the extractors with different options
 	defaultExt := extractor.New()
-	readabilityExt := extractor.New(
-		extractor.WithReadability(true),
+	preserveLinksExt := extractor.New(
+		extractor.WithPreserveImportantLinks(true),
 	)
 
 	// Test each real-world example
@@ -148,47 +148,22 @@ func TestCompareRealWorldWithReadability(t *testing.T) {
 				t.Fatalf("Failed to extract article from %s using default extractor: %v", filePath, err)
 			}
 
-			// Extract the article using the Readability.js-based extractor
-			readabilityArticle, err := readabilityExt.ExtractFromHTML(htmlContent, nil)
+			// Extract the article using the preserveLinks extractor
+			preserveLinksArticle, err := preserveLinksExt.ExtractFromHTML(htmlContent, nil)
 			if err != nil {
-				t.Fatalf("Failed to extract article from %s using Readability.js: %v", filePath, err)
+				t.Fatalf("Failed to extract article from %s using preserveLinks extractor: %v", filePath, err)
 			}
 
-			// Compare the results
+			// Basic validation
 			t.Logf("Default extractor title: %s", defaultArticle.Title)
-			t.Logf("Readability.js title: %s", readabilityArticle.Title)
+			t.Logf("PreserveLinks extractor title: %s", preserveLinksArticle.Title)
 
 			// Compare the number of paragraphs
 			t.Logf("Default extractor paragraphs: %d", len(defaultArticle.PlainText))
-			t.Logf("Readability.js paragraphs: %d", len(readabilityArticle.PlainText))
+			t.Logf("PreserveLinks extractor paragraphs: %d", len(preserveLinksArticle.PlainText))
 
-			// Check if the titles match
-			if defaultArticle.Title != readabilityArticle.Title {
-				t.Logf("Title mismatch: default=%q, readability=%q", defaultArticle.Title, readabilityArticle.Title)
-			}
-
-			// Check if the bylines match
-			if defaultArticle.Byline != readabilityArticle.Byline {
-				t.Logf("Byline mismatch: default=%q, readability=%q", defaultArticle.Byline, readabilityArticle.Byline)
-			}
-
-			// Check if the dates match
-			if !defaultArticle.Date.Equal(readabilityArticle.Date) {
-				t.Logf("Date mismatch: default=%v, readability=%v", defaultArticle.Date, readabilityArticle.Date)
-			}
-
-			// Compare the number of paragraphs
-			defaultParas := len(defaultArticle.PlainText)
-			readabilityParas := len(readabilityArticle.PlainText)
-			paraDiff := float64(defaultParas-readabilityParas) / float64(readabilityParas) * 100.0
-			if paraDiff < 0 {
-				paraDiff = -paraDiff
-			}
-
-			if paraDiff > 20.0 {
-				t.Logf("Significant paragraph count difference: default=%d, readability=%d (%.1f%% difference)",
-					defaultParas, readabilityParas, paraDiff)
-			}
+			// The titles should match
+			assert.Equal(t, defaultArticle.Title, preserveLinksArticle.Title, "Titles should match")
 		})
 	}
 }
@@ -214,10 +189,10 @@ func TestBenchmarkRealWorld(t *testing.T) {
 		return
 	}
 
-	// Create the extractors
+	// Create the extractors with different options
 	defaultExt := extractor.New()
-	readabilityExt := extractor.New(
-		extractor.WithReadability(true),
+	digestExt := extractor.New(
+		extractor.WithContentDigests(true),
 	)
 
 	// Test each real-world example
@@ -246,18 +221,18 @@ func TestBenchmarkRealWorld(t *testing.T) {
 			}
 			defaultDuration := time.Since(start)
 
-			// Benchmark the Readability.js-based extractor
+			// Benchmark the extractor with content digests
 			start = time.Now()
-			_, err = readabilityExt.ExtractFromHTML(htmlContent, nil)
+			_, err = digestExt.ExtractFromHTML(htmlContent, nil)
 			if err != nil {
-				t.Fatalf("Failed to extract article from %s using Readability.js: %v", filePath, err)
+				t.Fatalf("Failed to extract article from %s using digest extractor: %v", filePath, err)
 			}
-			readabilityDuration := time.Since(start)
+			digestDuration := time.Since(start)
 
 			// Compare the results
 			t.Logf("Default extractor: %v", defaultDuration)
-			t.Logf("Readability.js: %v", readabilityDuration)
-			t.Logf("Difference: %.2fx", float64(readabilityDuration)/float64(defaultDuration))
+			t.Logf("With digests: %v", digestDuration)
+			t.Logf("Difference: %.2fx", float64(digestDuration)/float64(defaultDuration))
 		})
 	}
 }

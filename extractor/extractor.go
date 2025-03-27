@@ -1,5 +1,5 @@
 // Package extractor provides the main functionality for extracting readable content from HTML.
-// It implements both a JavaScript-based extraction using Readability.js and a pure Go implementation.
+// It implements a pure Go extraction algorithm based on Mozilla's Readability.js.
 package extractor
 
 import (
@@ -7,10 +7,7 @@ import (
 	"io"
 	"time"
 
-	"github.com/mrjoshuak/readabiligo/internal/extractors"
-	"github.com/mrjoshuak/readabiligo/internal/javascript"
 	"github.com/mrjoshuak/readabiligo/internal/readability"
-	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
 	"github.com/mrjoshuak/readabiligo/types"
 )
 
@@ -28,12 +25,16 @@ type Extractor interface {
 // This follows the functional options pattern for configuring the extractor.
 type Option func(*types.ExtractionOptions)
 
-// WithReadability enables or disables Readability.js usage.
-// When enabled (default), the extractor will attempt to use Readability.js for extraction
-// if Node.js is available. If disabled or if Node.js is not available, it will fall back
-// to the pure Go implementation.
+// WithReadability formerly enabled or disabled Readability.js usage.
+// DEPRECATED: This option is now a no-op. The JavaScript bridge has been removed.
+// The pure Go implementation is now the only available approach.
+//
+// This option is kept for backward compatibility but has no effect.
+// All extraction is performed using the pure Go implementation.
 func WithReadability(use bool) Option {
 	return func(o *types.ExtractionOptions) {
+		// No-op - JavaScript support has been removed
+		// The UseReadability field is still set for backward compatibility
 		o.UseReadability = use
 	}
 }
@@ -48,11 +49,40 @@ func WithContentDigests(enable bool) Option {
 }
 
 // WithNodeIndexes enables or disables node index attributes.
-// Node indexes track the position of elements in the original HTML document,
-// which can be useful for mapping extracted content back to the source.
+// Node indexes are unique identifiers assigned to HTML elements during extraction,
+// which can be used to track the source of specific content blocks.
 func WithNodeIndexes(enable bool) Option {
 	return func(o *types.ExtractionOptions) {
 		o.NodeIndexes = enable
+	}
+}
+
+// WithPreserveImportantLinks enables or disables the preservation of important links
+// (like "More information..." links) from elements that would normally be removed
+// like footers, navigation, and asides. This is a ReadabiliGo-specific feature
+// that is not present in the original Readability.js algorithm.
+func WithPreserveImportantLinks(enable bool) Option {
+	return func(o *types.ExtractionOptions) {
+		o.PreserveImportantLinks = enable
+	}
+}
+
+// WithDetectContentType enables or disables automatic content type detection.
+// When enabled, the extractor will analyze the document structure to determine
+// the appropriate content type (Reference, Article, Technical, Error, Minimal)
+// and apply optimized extraction rules for that content type.
+func WithDetectContentType(enable bool) Option {
+	return func(o *types.ExtractionOptions) {
+		o.DetectContentType = enable
+	}
+}
+
+// WithContentType sets a specific content type for extraction, bypassing automatic detection.
+// This is useful when you know in advance what type of content you're extracting.
+// Has no effect if WithDetectContentType is enabled.
+func WithContentType(contentType types.ContentType) Option {
+	return func(o *types.ExtractionOptions) {
+		o.ContentType = contentType
 	}
 }
 
@@ -97,13 +127,14 @@ func (e *articleExtractor) ExtractFromHTML(html string, options *types.Extractio
 		var article *types.Article
 		var err error
 
-		// If using Readability.js, call the JavaScript implementation
+		// If using Readability.js option is set (deprecated), provide a warning but continue with pure Go
 		if options.UseReadability {
-			article, err = e.extractUsingJavaScript(html, options)
-		} else {
-			// Use pure Go implementation
-			article, err = e.extractUsingPureGo(html, options)
+			// Log warning in debug mode here if needed
+			// Silently fall back to pure Go implementation
 		}
+		
+		// Use pure Go implementation
+		article, err = e.extractUsingPureGo(html, options)
 
 		// Send the result to the channel
 		resultCh <- struct {
@@ -119,59 +150,6 @@ func (e *articleExtractor) ExtractFromHTML(html string, options *types.Extractio
 	case <-time.After(options.Timeout):
 		return nil, fmt.Errorf("extraction timed out after %v", options.Timeout)
 	}
-}
-
-// extractUsingJavaScript extracts article content using Readability.js.
-// It requires Node.js to be available on the system. If Node.js is not available,
-// it falls back to the pure Go implementation.
-func (e *articleExtractor) extractUsingJavaScript(html string, options *types.ExtractionOptions) (*types.Article, error) {
-	// Check if Node.js is available
-	if !javascript.HaveNode() {
-		// Fall back to pure Go implementation
-		return e.extractUsingPureGo(html, options)
-	}
-
-	// Extract article using Readability.js
-	result, err := javascript.ExtractArticle(html)
-	if err != nil {
-		return nil, fmt.Errorf("failed to extract article using Readability.js: %w", err)
-	}
-
-	// Parse the date if available
-	var date time.Time
-	if result.Date != "" {
-		date, err = time.Parse(time.RFC3339, result.Date)
-		if err != nil {
-			// Try other date formats
-			date, err = time.Parse("2006-01-02T15:04:05Z", result.Date)
-			if err != nil {
-				// If we can't parse the date, use the current time
-				date = time.Now()
-			}
-		}
-	}
-
-	// Create the article
-	article := &types.Article{
-		Title:        result.Title,
-		Byline:       result.Byline,
-		Date:         date,
-		Content:      result.Content,
-		PlainContent: "",
-		PlainText:    []types.Block{},
-	}
-
-	// Generate plain content with content digests and node indexes if requested
-	plainContent, err := simplifiers.PlainContent(article.Content, options.ContentDigests, options.NodeIndexes)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate plain content: %w", err)
-	}
-	article.PlainContent = plainContent
-
-	// Extract plain text blocks
-	article.PlainText = extractors.ExtractTextBlocks(article.PlainContent, true)
-
-	return article, nil
 }
 
 // ExtractFromReader extracts article content from an io.Reader.

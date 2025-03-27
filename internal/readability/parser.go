@@ -2,11 +2,13 @@ package readability
 
 import (
 	"fmt"
-	"time"
+	
+	"github.com/mrjoshuak/readabiligo/types"
 )
 
-// ParseHTML parses HTML content using the Readability algorithm
-func ParseHTML(html string, opts *ReadabilityOptions) (*ReadabilityArticle, error) {
+// ParseHTMLWithReadability parses HTML content using the Readability algorithm
+// This is the preferred entry point for parsing HTML content with the internal readability package
+func ParseHTMLWithReadability(html string, opts *ReadabilityOptions) (*ReadabilityArticle, error) {
 	// Create a new Readability instance from HTML
 	r, err := NewFromHTML(html, opts)
 	if err != nil {
@@ -18,6 +20,7 @@ func ParseHTML(html string, opts *ReadabilityOptions) (*ReadabilityArticle, erro
 }
 
 // ParseWithOptions extracts article content from HTML using custom options
+// This function is deprecated. Use ParseHTML with a properly configured ReadabilityOptions instead.
 func ParseWithOptions(html string, debug bool, maxElems int, charThreshold int) (*ReadabilityArticle, error) {
 	// Create custom options
 	opts := defaultReadabilityOptions()
@@ -30,39 +33,17 @@ func ParseWithOptions(html string, debug bool, maxElems int, charThreshold int) 
 	}
 
 	// Parse with custom options
-	return ParseHTML(html, &opts)
+	return ParseHTMLWithReadability(html, &opts)
 }
 
 // Parse extracts article content from HTML using default options
+// This is kept for backwards compatibility. New code should use ParseHTML directly.
 func Parse(html string) (*ReadabilityArticle, error) {
-	return ParseHTML(html, nil)
+	return ParseHTMLWithReadability(html, nil)
 }
 
-// ToArticle converts a ReadabilityArticle to a standard Article format
-// This allows compatibility with existing code that expects the Article type
-type Article struct {
-	Title        string    `json:"title"`
-	Byline       string    `json:"byline"`
-	Date         time.Time `json:"date"`
-	Content      string    `json:"content"`
-	PlainContent string    `json:"plain_content"`
-	TextContent  string    `json:"text_content"`
-	Excerpt      string    `json:"excerpt"`
-	SiteName     string    `json:"site_name"`
-	Length       int       `json:"length"`
-}
-
-// ToArticle converts a ReadabilityArticle to a standard Article format
-func (r *ReadabilityArticle) ToArticle() *Article {
-	return &Article{
-		Title:       r.Title,
-		Byline:      r.Byline,
-		Date:        r.Date,
-		Content:     r.Content,
-		PlainContent: r.Content, // Will be processed by caller
-		TextContent: r.TextContent,
-		Excerpt:     r.Excerpt,
-		SiteName:    r.SiteName,
-		Length:      r.Length,
-	}
+// ToStandardArticleV2 is an alias for ToStandardArticle in adapter.go
+// This method exists only to avoid compilation errors after refactoring
+func (r *ReadabilityArticle) ToStandardArticleV2() *types.Article {
+	return r.ToStandardArticle()
 }
