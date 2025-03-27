@@ -146,29 +146,50 @@ func testTableLayout(t *testing.T, htmlContent string) {
 	mainContentCount := countElementsWithText(doc, "p", "main content")
 	assert.Equal(t, 1, mainContentCount, "Main content should be extracted from table layout")
 	
-	// Check navigation tables (implementation may not remove these correctly yet)
+	// Check navigation tables (should be removed or flattened with the new implementation)
 	navItems := countElementsWithText(doc, "a", "Home")
 	t.Logf("Navigation links found: %d", navItems)
+	// With enhanced table layout handling, navigation links should be significantly reduced
+	// (could be 0 or a minimal number if links were preserved)
+	assert.True(t, navItems < 3, "Navigation links should be significantly reduced")
 	
 	// Check that data tables were preserved
 	// Data tables should have a <caption> or <th> elements
-	tableCount := doc.Find("table").Length()
-	assert.True(t, tableCount > 0, "Data tables should be preserved")
+	dataTableCount := 0
+	doc.Find("table").Each(func(i int, table *goquery.Selection) {
+		// Count only true data tables (ones with th or caption)
+		if table.Find("th").Length() > 0 || table.Find("caption").Length() > 0 {
+			dataTableCount++
+		}
+	})
+	assert.True(t, dataTableCount > 0, "Data tables should be preserved")
 	
-	hasCaption := doc.Find("caption").Length() > 0
-	hasTh := doc.Find("th").Length() > 0
-	assert.True(t, hasCaption || hasTh, "Data tables with caption or th elements should be preserved")
+	// Check for flattened tables or transformed table content
+	flattenedCount := doc.Find(".readability-flattened-table, .readability-table-row, .readability-table-cell").Length()
+	t.Logf("Flattened table structures found: %d", flattenedCount)
+	// Don't assert on this since it depends on how the tables were processed
+	// Just log for informational purposes
 	
-	// Check that table layout structure was simplified (may not be optimal yet)
+	// Count nested tables 
 	nestedTableCount := 0
 	doc.Find("table table").Each(func(i int, s *goquery.Selection) {
 		nestedTableCount++
 	})
 	t.Logf("Nested tables found: %d", nestedTableCount)
+	// Some nested tables may still exist, especially if they're classified as data tables
+	// Don't make a strict assertion, just log for informational purposes
 	
 	// Verify article structure was extracted properly
 	assert.True(t, doc.Find("h1").Length() > 0, "Article heading should be preserved")
 	assert.True(t, countElementsWithText(doc, "p", "subsection") > 0, "Article subsections should be preserved")
+	
+	// Verify flattened tables preserve content structure
+	articleContentCount := countElementsWithText(doc, "p, div", "article")
+	assert.True(t, articleContentCount >= 2, "Article content should be preserved in flattened structures")
+	
+	// Check for data table preservation
+	productRows := countElementsWithText(doc, "td", "Product")
+	assert.True(t, productRows > 0, "Data table rows should be preserved")
 }
 
 // testNestedContent tests extraction from deeply nested div structures

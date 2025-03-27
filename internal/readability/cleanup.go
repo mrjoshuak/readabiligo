@@ -280,7 +280,7 @@ func (r *Readability) cleanConditionally(e *goquery.Selection, tag string) {
 
 // shouldSkipConditionalCleaning determines if a node should be exempt from conditional cleaning
 func (r *Readability) shouldSkipConditionalCleaning(node *goquery.Selection, tag string) bool {
-	// Skip data tables
+	// Skip data tables completely
 	if tag == "table" && node.AttrOr("data-readability-table-type", "") == "data" {
 		return true
 	}
@@ -295,6 +295,30 @@ func (r *Readability) shouldSkipConditionalCleaning(node *goquery.Selection, tag
 	})
 	if inDataTable {
 		return true
+	}
+	
+	// For presentation tables, skip cleaning only for content-rich ones
+	// but allow navigation tables to be cleaned
+	if tag == "table" && node.AttrOr("data-readability-table-type", "") == "presentation" {
+		// If it's explicitly marked as navigation, don't skip cleaning
+		if node.AttrOr("data-readability-table-nav", "") == "true" {
+			return false
+		}
+		
+		// For other presentation tables, check if they have meaningful content
+		textLength := len(getInnerText(node, true))
+		if textLength > LayoutTableTextContentThreshold {
+			// Check if it's not link-heavy
+			linkText := 0
+			node.Find("a").Each(func(i int, a *goquery.Selection) {
+				linkText += len(getInnerText(a, true))
+			})
+			
+			if textLength > 0 && float64(linkText)/float64(textLength) < 0.5 {
+				// Skip cleaning for content-rich tables
+				return true
+			}
+		}
 	}
 
 	// Skip elements inside code blocks
@@ -910,32 +934,272 @@ func (r *Readability) cleanClasses(node *goquery.Selection) {
 }
 
 // markDataTables adds a flag to tables that appear to contain data
+// and handles nested table structures
 func (r *Readability) markDataTables(root *goquery.Selection) {
+	// First, find the deepest nested tables and work outward
+	tablesByNestingLevel := r.groupTablesByNestingLevel(root)
+	
+	// Process tables from deepest nesting level first
+	for level := len(tablesByNestingLevel) - 1; level >= 0; level-- {
+		tablesAtLevel := tablesByNestingLevel[level]
+		for _, table := range tablesAtLevel {
+			r.processAndClassifyTable(table, level)
+		}
+	}
+	
+	// After classification, flatten layout tables with excessive nesting
+	r.flattenNestedLayoutTables(root)
+}
+
+// groupTablesByNestingLevel organizes tables by their nesting depth
+func (r *Readability) groupTablesByNestingLevel(root *goquery.Selection) [][]*goquery.Selection {
+	// Map to track tables by nesting level
+	tablesByLevel := make(map[int][]*goquery.Selection)
+	maxLevel := 0
+	
+	// Helper function to measure nesting level
+	var calculateNestingLevel func(*goquery.Selection) int
+	calculateNestingLevel = func(node *goquery.Selection) int {
+		// Count how many ancestor tables this table has
+		level := 0
+		parent := node.Parent()
+		for parent.Length() > 0 {
+			if getNodeName(parent) == "TABLE" {
+				level++
+			}
+			parent = parent.Parent()
+		}
+		return level
+	}
+	
+	// Process all tables
 	root.Find("table").Each(func(i int, table *goquery.Selection) {
-		// Check for presentation indications
-		if r.isTablePresentational(table) {
-			table.SetAttr("data-readability-table-type", "presentation")
-			return
+		level := calculateNestingLevel(table)
+		if level > maxLevel {
+			maxLevel = level
 		}
-
-		// Check for data table indications
-		if r.isTableData(table) {
-			table.SetAttr("data-readability-table-type", "data")
-			return
-		}
-
-		// Check table metrics
-		metrics := r.calculateTableMetrics(table)
 		
-		// Classify by size
-		if metrics.rows >= DataTableMinRows || 
-		   metrics.columns > DataTableMinColumns || 
-		   metrics.cells > DataTableMinCells {
+		if tablesByLevel[level] == nil {
+			tablesByLevel[level] = make([]*goquery.Selection, 0)
+		}
+		tablesByLevel[level] = append(tablesByLevel[level], table)
+	})
+	
+	// Convert map to slice of slices
+	result := make([][]*goquery.Selection, maxLevel+1)
+	for level := 0; level <= maxLevel; level++ {
+		result[level] = tablesByLevel[level]
+	}
+	
+	return result
+}
+
+// processAndClassifyTable analyzes a table and classifies it as data or layout
+func (r *Readability) processAndClassifyTable(table *goquery.Selection, nestingLevel int) {
+	// First check explicit indicators
+	// Check for presentation indications
+	if r.isTablePresentational(table) {
+		table.SetAttr("data-readability-table-type", "presentation")
+		
+		// Flag navigation tables if they appear to be navigation
+		if r.isNavigationTable(table) {
+			table.SetAttr("data-readability-table-nav", "true")
+		}
+		return
+	}
+
+	// Check for data table indications
+	if r.isTableData(table) {
+		table.SetAttr("data-readability-table-type", "data")
+		return
+	}
+	
+	// Enhanced analysis for tables without clear indicators
+	
+	// Get table metrics
+	metrics := r.calculateTableMetrics(table)
+	
+	// Get link density for navigation detection
+	linkDensity := r.calculateTableLinkDensity(table)
+	
+	// Check if this table appears to be navigation
+	if linkDensity > NavigationLinkDensityThreshold {
+		table.SetAttr("data-readability-table-type", "presentation")
+		table.SetAttr("data-readability-table-nav", "true")
+		return
+	}
+	
+	// Check if this is likely a layout table due to excessive nesting
+	if nestingLevel > LayoutTableNestingThreshold {
+		table.SetAttr("data-readability-table-type", "presentation")
+		return
+	}
+	
+	// Check for size indicators of data tables
+	if metrics.rows >= DataTableMinRows || 
+	   metrics.columns > DataTableMinColumns || 
+	   metrics.cells > DataTableMinCells {
+		table.SetAttr("data-readability-table-type", "data")
+	} else {
+		// Check for meaningful content that might indicate it's not just layout
+		textLength := len(getInnerText(table, true))
+		linkTextLength := 0
+		table.Find("a").Each(func(i int, a *goquery.Selection) {
+			linkTextLength += len(getInnerText(a, true))
+		})
+		nonLinkTextLength := textLength - linkTextLength
+		
+		if nonLinkTextLength > LayoutTableTextContentThreshold && linkDensity < 0.3 {
+			// Table with significant non-link text is likely content
 			table.SetAttr("data-readability-table-type", "data")
 		} else {
+			// Default to presentation
 			table.SetAttr("data-readability-table-type", "presentation")
 		}
+	}
+}
+
+// flattenNestedLayoutTables simplifies nested presentation tables
+func (r *Readability) flattenNestedLayoutTables(root *goquery.Selection) {
+	// Find deeply nested presentation tables
+	root.Find("table[data-readability-table-type='presentation'] table[data-readability-table-type='presentation']").Each(func(i int, nestedTable *goquery.Selection) {
+		// Skip if this table has already been processed or removed
+		if nestedTable.Nodes == nil || len(nestedTable.Nodes) == 0 {
+			return
+		}
+		
+		// Skip data tables completely
+		parentTable := nestedTable.ParentsFiltered("table").First()
+		if parentTable.AttrOr("data-readability-table-type", "") == "data" {
+			return
+		}
+		
+		// Create a div to replace the nested table
+		replacement := r.createElement("div")
+		replacement.SetAttr("class", "readability-flattened-table")
+		
+		// For navigation tables, we'll be more aggressive in simplification
+		if nestedTable.AttrOr("data-readability-table-nav", "") == "true" {
+			// For navigation tables, only preserve the links
+			nestedTable.Find("a").Each(func(j int, link *goquery.Selection) {
+				// Only keep links with text
+				if len(strings.TrimSpace(link.Text())) > 0 {
+					linkCopy := link.Clone()
+					div := r.createElement("div")
+					div.AppendSelection(linkCopy)
+					replacement.AppendSelection(div)
+				}
+			})
+		} else {
+			// For regular layout tables, preserve more structure
+			nestedTable.Find("tr").Each(func(j int, row *goquery.Selection) {
+				// Create a div for each row
+				rowDiv := r.createElement("div")
+				rowDiv.SetAttr("class", "readability-table-row")
+				
+				// Process cells in the row
+				row.Find("td").Each(func(k int, cell *goquery.Selection) {
+					// Create a div for each cell
+					cellDiv := r.createElement("div")
+					cellDiv.SetAttr("class", "readability-table-cell")
+					
+					// Copy content from the cell to the div
+					cellHtml, err := cell.Html()
+					if err == nil {
+						cellDiv.SetHtml(cellHtml)
+					}
+					
+					rowDiv.AppendSelection(cellDiv)
+				})
+				
+				// Only add non-empty rows
+				if rowDiv.Children().Length() > 0 {
+					replacement.AppendSelection(rowDiv)
+				}
+			})
+		}
+		
+		// Only replace if we have content in our replacement
+		if replacement.Children().Length() > 0 {
+			nestedTable.ReplaceWithSelection(replacement)
+		}
 	})
+	
+	// Handle single-cell tables and table cells with single content elements
+	root.Find("table[data-readability-table-type='presentation']").Each(func(i int, table *goquery.Selection) {
+		// Skip if already processed or removed
+		if table.Nodes == nil || len(table.Nodes) == 0 {
+			return
+		}
+		
+		// Check for single-row, single-column table structure
+		rows := table.Find("tr")
+		if rows.Length() == 1 {
+			cells := rows.First().Find("td")
+			if cells.Length() == 1 {
+				cell := cells.First()
+				
+				// Replace with a div or paragraph based on content
+				if everyNode(cell.Contents(), func(i int, s *goquery.Selection) bool {
+					return s.Get(0) != nil && isPhrasingContent(s.Get(0))
+				}) {
+					// If the cell contains only phrasing content, replace with a paragraph
+					replacement := setNodeTag(cell.Clone(), "p")
+					table.ReplaceWithSelection(replacement)
+				} else {
+					// Otherwise, replace with a div
+					replacement := setNodeTag(cell.Clone(), "div")
+					table.ReplaceWithSelection(replacement)
+				}
+			}
+		}
+	})
+}
+
+// isNavigationTable checks if a table appears to be used for navigation
+func (r *Readability) isNavigationTable(table *goquery.Selection) bool {
+	// Navigation tables typically have high link density
+	linkDensity := r.calculateTableLinkDensity(table)
+	if linkDensity > NavigationLinkDensityThreshold {
+		return true
+	}
+	
+	// Navigation tables often have nav-related classes
+	class, _ := table.Attr("class")
+	id, _ := table.Attr("id")
+	combined := strings.ToLower(class + " " + id)
+	
+	// Check for navigation indicators in class or id
+	navigationPatterns := []string{"nav", "menu", "header", "sidebar", "topbar"}
+	for _, pattern := range navigationPatterns {
+		if strings.Contains(combined, pattern) {
+			return true
+		}
+	}
+	
+	// Check for list-like structure with mostly links
+	liCount := table.Find("li").Length()
+	if liCount > 3 && 
+	   table.Find("a").Length() >= int(float64(liCount) * 0.8) {
+		return true
+	}
+	
+	return false
+}
+
+// calculateTableLinkDensity measures the proportion of link text in a table
+func (r *Readability) calculateTableLinkDensity(table *goquery.Selection) float64 {
+	totalText := len(getInnerText(table, true))
+	if totalText == 0 {
+		return 0
+	}
+	
+	linkText := 0
+	table.Find("a").Each(func(i int, a *goquery.Selection) {
+		linkText += len(getInnerText(a, true))
+	})
+	
+	return float64(linkText) / float64(totalText)
 }
 
 // isTablePresentational checks if a table is for layout rather than data
@@ -950,9 +1214,29 @@ func (r *Readability) isTablePresentational(table *goquery.Selection) bool {
 		return true
 	}
 	
-	// Check for nested tables (indicates layout)
-	if table.Find("table").Length() > 0 {
-		return true
+	// Layout tables often have specific attributes
+	width, hasWidth := table.Attr("width")
+	if hasWidth && width == "100%" {
+		// Check for no borders, which is common in layout tables
+		border, hasBorder := table.Attr("border")
+		if !hasBorder || border == "0" {
+			cellspacing, hasCellspacing := table.Attr("cellspacing")
+			if !hasCellspacing || cellspacing == "0" {
+				return true
+			}
+		}
+	}
+	
+	// Layout tables often have specific class/id names
+	class, _ := table.Attr("class")
+	id, _ := table.Attr("id")
+	combined := strings.ToLower(class + " " + id)
+	
+	layoutPatterns := []string{"layout", "grid", "wrapper", "container", "outer", "inner"}
+	for _, pattern := range layoutPatterns {
+		if strings.Contains(combined, pattern) {
+			return true
+		}
 	}
 	
 	return false
@@ -978,6 +1262,56 @@ func (r *Readability) isTableData(table *goquery.Selection) bool {
 		}
 	}
 	
+	// Data tables often have specific class/id names
+	class, _ := table.Attr("class")
+	id, _ := table.Attr("id")
+	combined := strings.ToLower(class + " " + id)
+	
+	dataPatterns := []string{"data", "stats", "statistics", "results", "info"}
+	for _, pattern := range dataPatterns {
+		if strings.Contains(combined, pattern) {
+			return true
+		}
+	}
+	
+	// Check for consistent cell structure which is common in data tables
+	if r.hasConsistentCellStructure(table) {
+		return true
+	}
+	
+	return false
+}
+
+// hasConsistentCellStructure checks if a table has uniform cells typical of data tables
+func (r *Readability) hasConsistentCellStructure(table *goquery.Selection) bool {
+	rows := table.Find("tr")
+	if rows.Length() < 2 {
+		return false
+	}
+	
+	// Check if all rows have the same number of cells
+	cellCounts := []int{}
+	rows.Each(func(i int, row *goquery.Selection) {
+		cellCounts = append(cellCounts, row.Find("td, th").Length())
+	})
+	
+	// If all rows have the same cell count and it's > 1, likely a data table
+	if len(cellCounts) > 0 {
+		firstCount := cellCounts[0]
+		if firstCount > 1 {
+			allSame := true
+			for _, count := range cellCounts {
+				if count != firstCount {
+					allSame = false
+					break
+				}
+			}
+			if allSame {
+				return true
+			}
+		}
+	}
+	
 	return false
 }
 
@@ -997,7 +1331,7 @@ func (r *Readability) calculateTableMetrics(table *goquery.Selection) TableMetri
 	// Count columns by finding the row with the most cells
 	table.Find("tr").Each(func(i int, tr *goquery.Selection) {
 		rowCols := 0
-		tr.Find("td").Each(func(j int, td *goquery.Selection) {
+		tr.Find("td, th").Each(func(j int, td *goquery.Selection) {
 			colspan, _ := strconv.Atoi(td.AttrOr("colspan", "1"))
 			rowCols += colspan
 		})
@@ -1006,6 +1340,8 @@ func (r *Readability) calculateTableMetrics(table *goquery.Selection) TableMetri
 		}
 	})
 	
-	metrics.cells = metrics.rows * metrics.columns
+	// Get actual cell count for greater accuracy
+	metrics.cells = table.Find("td, th").Length()
+	
 	return metrics
 }

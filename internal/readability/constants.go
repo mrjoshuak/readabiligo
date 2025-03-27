@@ -96,13 +96,22 @@ const (
 	HeadingDensityThreshold = 0.9
 
 	// DataTableMinRows is the minimum number of rows for a table to be considered a data table
-	DataTableMinRows = 10
+	DataTableMinRows = 3
 
 	// DataTableMinColumns is the minimum number of columns for a table to be considered a data table
-	DataTableMinColumns = 4
+	DataTableMinColumns = 2
 
 	// DataTableMinCells is the minimum number of cells for a table to be considered a data table
 	DataTableMinCells = 10
+	
+	// LayoutTableNestingThreshold is the maximum allowed nesting level for layout tables
+	LayoutTableNestingThreshold = 2
+	
+	// NavigationLinkDensityThreshold is the link density threshold for considering a table to be navigation
+	NavigationLinkDensityThreshold = 0.8
+	
+	// LayoutTableTextContentThreshold is the minimum text content (non-link) for a table to be kept
+	LayoutTableTextContentThreshold = 50
 )
 
 // Node scoring constants

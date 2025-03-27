@@ -85,33 +85,9 @@ func (r *Readability) prepArticle(articleContent *goquery.Selection) {
 			br.Remove()
 		}
 	})
-
-	// Replace single-cell tables with their content
-	articleContent.Find("table").Each(func(i int, table *goquery.Selection) {
-		tbody := table.Find("tbody").First()
-		if tbody.Length() == 0 {
-			tbody = table
-		}
-
-		// Check if table has a single row
-		rows := tbody.Find("tr")
-		if rows.Length() == 1 {
-			// Check if row has a single cell
-			cells := rows.First().Find("td")
-			if cells.Length() == 1 {
-				cell := cells.First()
-				// Replace table with cell content wrapped in div or p
-				if everyNode(cell.Contents(), func(i int, s *goquery.Selection) bool {
-					return s.Get(0) != nil && isPhrasingContent(s.Get(0))
-				}) {
-					cell = setNodeTag(cell, "p")
-				} else {
-					cell = setNodeTag(cell, "div")
-				}
-				table.ReplaceWithSelection(cell)
-			}
-		}
-	})
+	
+	// Note: Single-cell table replacement is now handled in the more comprehensive
+	// flattenNestedLayoutTables function in cleanup.go
 }
 
 // prepDocument prepares the document for readability to scrape it
