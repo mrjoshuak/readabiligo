@@ -6,9 +6,9 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// BylineXPaths is a list of XPaths for HTML tags that could contain a byline
-// The int values reflect confidence in these XPaths and the preference used for extraction
-var BylineXPaths = map[string]int{
+// BylineSelectors is a list of CSS selectors for HTML tags that could contain a byline
+// The int values reflect confidence in these selectors and the preference used for extraction
+var BylineSelectors = map[string]int{
 	"meta[property='article:author']":    10,
 	"meta[property='og:article:author']": 9,
 	"meta[name='author']":                8,
@@ -75,8 +75,8 @@ func ExtractByline(html string) string {
 
 // extractBylineFromMeta extracts the byline from meta tags
 func extractBylineFromMeta(doc *goquery.Document) string {
-	// Try each XPath in order of confidence
-	for selector, score := range BylineXPaths {
+	// Try each selector in order of confidence
+	for selector, score := range BylineSelectors {
 		var byline string
 
 		// For meta tags, get the content attribute

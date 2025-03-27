@@ -6,43 +6,43 @@ import (
 
 // ExtractTitle extracts the article title from HTML content
 func ExtractTitle(html string) string {
-	// List of XPaths for HTML tags that could contain a title
-	// Scores reflect confidence in these XPaths and the preference used for extraction
-	xpaths := []XPathScore{
-		{XPath: "//h1[@class=\"entry-title\"]//text()", Score: 6}, // Highest priority for h1 with class="entry-title"
-		{XPath: "//h1[@itemprop=\"headline\"]//text()", Score: 5}, // High priority for h1 with itemprop="headline"
-		{XPath: "//header[@class=\"entry-header\"]/h1[@class=\"entry-title\"]//text()", Score: 4},
-		{XPath: "//meta[@property=\"og:title\"]/@content", Score: 3},
-		{XPath: "//h2[@itemprop=\"headline\"]//text()", Score: 2},
-		{XPath: "//meta[contains(@itemprop, \"headline\")]/@content", Score: 2},
-		{XPath: "//body/title//text()", Score: 1},
-		{XPath: "//div[@class=\"postarea\"]/h2/a//text()", Score: 1},
-		{XPath: "//h1[@class=\"post__title\"]//text()", Score: 1},
-		{XPath: "//h1[@class=\"title\"]//text()", Score: 1},
-		{XPath: "//header/h1//text()", Score: 1},
-		{XPath: "//meta[@name=\"dcterms.title\"]/@content", Score: 1},
-		{XPath: "//meta[@name=\"fb_title\"]/@content", Score: 1},
-		{XPath: "//meta[@name=\"sailthru.title\"]/@content", Score: 1},
-		{XPath: "//meta[@name=\"title\"]/@content", Score: 1},
-		// Additional XPaths for edge cases
-		{XPath: "//h1//text()", Score: 1},
-		{XPath: "//h2//text()", Score: 1},
-		{XPath: "//h3//text()", Score: 1},
-		{XPath: "//meta[@property=\"twitter:title\"]/@content", Score: 2},
-		{XPath: "//meta[@name=\"twitter:title\"]/@content", Score: 2},
-		{XPath: "//meta[@property=\"article:title\"]/@content", Score: 2},
-		{XPath: "//meta[@name=\"article:title\"]/@content", Score: 2},
-		{XPath: "//div[@class=\"title\"]//text()", Score: 1},
-		{XPath: "//div[@id=\"title\"]//text()", Score: 1},
-		{XPath: "//div[contains(@class, \"title\")]//text()", Score: 1},
-		{XPath: "//div[contains(@id, \"title\")]//text()", Score: 1},
+	// List of selectors for HTML tags that could contain a title
+	// Scores reflect confidence in these selectors and the preference used for extraction
+	selectors := []SelectorScore{
+		{Selector: "//h1[@class=\"entry-title\"]//text()", Score: 6}, // Highest priority for h1 with class="entry-title"
+		{Selector: "//h1[@itemprop=\"headline\"]//text()", Score: 5}, // High priority for h1 with itemprop="headline"
+		{Selector: "//header[@class=\"entry-header\"]/h1[@class=\"entry-title\"]//text()", Score: 4},
+		{Selector: "//meta[@property=\"og:title\"]/@content", Score: 3},
+		{Selector: "//h2[@itemprop=\"headline\"]//text()", Score: 2},
+		{Selector: "//meta[contains(@itemprop, \"headline\")]/@content", Score: 2},
+		{Selector: "//body/title//text()", Score: 1},
+		{Selector: "//div[@class=\"postarea\"]/h2/a//text()", Score: 1},
+		{Selector: "//h1[@class=\"post__title\"]//text()", Score: 1},
+		{Selector: "//h1[@class=\"title\"]//text()", Score: 1},
+		{Selector: "//header/h1//text()", Score: 1},
+		{Selector: "//meta[@name=\"dcterms.title\"]/@content", Score: 1},
+		{Selector: "//meta[@name=\"fb_title\"]/@content", Score: 1},
+		{Selector: "//meta[@name=\"sailthru.title\"]/@content", Score: 1},
+		{Selector: "//meta[@name=\"title\"]/@content", Score: 1},
+		// Additional selectors for edge cases
+		{Selector: "//h1//text()", Score: 1},
+		{Selector: "//h2//text()", Score: 1},
+		{Selector: "//h3//text()", Score: 1},
+		{Selector: "//meta[@property=\"twitter:title\"]/@content", Score: 2},
+		{Selector: "//meta[@name=\"twitter:title\"]/@content", Score: 2},
+		{Selector: "//meta[@property=\"article:title\"]/@content", Score: 2},
+		{Selector: "//meta[@name=\"article:title\"]/@content", Score: 2},
+		{Selector: "//div[@class=\"title\"]//text()", Score: 1},
+		{Selector: "//div[@id=\"title\"]//text()", Score: 1},
+		{Selector: "//div[contains(@class, \"title\")]//text()", Score: 1},
+		{Selector: "//div[contains(@id, \"title\")]//text()", Score: 1},
 		// Head title should have the lowest priority
-		{XPath: "//head/title//text()", Score: 0},
-		{XPath: "//title//text()", Score: 0},
+		{Selector: "//head/title//text()", Score: 0},
+		{Selector: "//title//text()", Score: 0},
 	}
 
-	// Extract titles using the XPaths
-	extractedTitles := ExtractElement(html, xpaths, combineSimilarTitles)
+	// Extract titles using the selectors
+	extractedTitles := ExtractElement(html, selectors, combineSimilarTitles)
 	if len(extractedTitles) == 0 {
 		return ""
 	}
@@ -84,15 +84,15 @@ func combineSimilarTitles(extractedStrings map[string]*ExtractedElement) map[str
 			// If title1 is a subset of title2, combine their scores
 			if isSubstring(title1, title2) {
 				extractedStrings[title1].Score += extractedStrings[title2].Score
-				extractedStrings[title1].XPaths = append(extractedStrings[title1].XPaths, extractedStrings[title2].XPaths...)
-				sort.Strings(extractedStrings[title1].XPaths)
+				extractedStrings[title1].Selectors = append(extractedStrings[title1].Selectors, extractedStrings[title2].Selectors...)
+				sort.Strings(extractedStrings[title1].Selectors)
 			} else if equalIgnoreCase(title1, title2) {
 				// If titles are identical ignoring case, combine scores
 				// Take the one with more capitals as the key
 				if countUppercase(title1) > countUppercase(title2) {
 					extractedStrings[title1].Score += extractedStrings[title2].Score
-					extractedStrings[title1].XPaths = append(extractedStrings[title1].XPaths, extractedStrings[title2].XPaths...)
-					sort.Strings(extractedStrings[title1].XPaths)
+					extractedStrings[title1].Selectors = append(extractedStrings[title1].Selectors, extractedStrings[title2].Selectors...)
+					sort.Strings(extractedStrings[title1].Selectors)
 				}
 			}
 		}
