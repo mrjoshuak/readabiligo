@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/mrjoshuak/readabiligo"
 )
 
 // TestExtractFromFile tests basic article extraction from a file
@@ -28,7 +28,7 @@ func TestExtractFromFile(t *testing.T) {
 	defer file.Close()
 
 	// Create the extractor with default options
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Extract the article
 	article, err := ext.ExtractFromReader(file, nil)
@@ -80,8 +80,8 @@ func TestExtractWithReadability(t *testing.T) {
 	defer file.Close()
 
 	// Create the extractor with Readability.js enabled
-	ext := extractor.New(
-		extractor.WithReadability(true),
+	ext := readabiligo.New(
+		readabiligo.WithReadability(true),
 	)
 
 	// Extract the article
@@ -134,8 +134,8 @@ func TestExtractWithContentDigests(t *testing.T) {
 	defer file.Close()
 
 	// Create the extractor with content digests enabled
-	ext := extractor.New(
-		extractor.WithContentDigests(true),
+	ext := readabiligo.New(
+		readabiligo.WithContentDigests(true),
 	)
 
 	// Extract the article
@@ -193,8 +193,8 @@ func TestExtractWithNodeIndexes(t *testing.T) {
 	defer file.Close()
 
 	// Create the extractor with node indexes enabled
-	ext := extractor.New(
-		extractor.WithNodeIndexes(true),
+	ext := readabiligo.New(
+		readabiligo.WithNodeIndexes(true),
 	)
 
 	// Extract the article
@@ -254,7 +254,7 @@ func TestMultipleWebsites(t *testing.T) {
 	}
 
 	// Create the extractor with default options
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Run tests for each website
 	for _, tc := range testCases {
@@ -312,7 +312,7 @@ func TestEdgeCases(t *testing.T) {
 	}
 
 	// Create the extractor with default options
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Run tests for each edge case
 	for _, tc := range testCases {
@@ -365,7 +365,7 @@ func TestCompareWithReadabiliPy(t *testing.T) {
 	}
 
 	// Create the extractor with default options
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Run tests for each case
 	for _, tc := range testCases {
@@ -470,7 +470,7 @@ func BenchmarkExtraction(b *testing.B) {
 			htmlContent := string(htmlBytes)
 
 			// Create the extractor with default options
-			ext := extractor.New()
+			ext := readabiligo.New()
 
 			// Reset the timer before the loop
 			b.ResetTimer()
@@ -517,8 +517,8 @@ func BenchmarkExtractionWithReadability(b *testing.B) {
 			htmlContent := string(htmlBytes)
 
 			// Create the extractor with Readability.js enabled
-			ext := extractor.New(
-				extractor.WithReadability(true),
+			ext := readabiligo.New(
+				readabiligo.WithReadability(true),
 			)
 
 			// Reset the timer before the loop
@@ -552,8 +552,8 @@ func TestExtractionTimeout(t *testing.T) {
 	defer file.Close()
 
 	// Create the extractor with a very short timeout
-	ext := extractor.New(
-		extractor.WithTimeout(1 * time.Millisecond), // Unreasonably short timeout
+	ext := readabiligo.New(
+		readabiligo.WithTimeout(1 * time.Millisecond), // Unreasonably short timeout
 	)
 
 	// Extract the article
@@ -593,7 +593,7 @@ func TestRealWorldWebsites(t *testing.T) {
 	}
 
 	// Create the extractor with default options
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Run tests for each website
 	for _, tc := range testCases {

@@ -7,8 +7,7 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/mrjoshuak/readabiligo/extractor"
-	"github.com/mrjoshuak/readabiligo/types"
+	"github.com/mrjoshuak/readabiligo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -24,14 +23,14 @@ func TestContentTypeOptimizedExtraction(t *testing.T) {
 	testCases := []struct {
 		name         string
 		htmlFile     string
-		contentType  types.ContentType
+		contentType  readabiligo.ContentType
 		description  string
 	}{
-		{"Wikipedia", "wikipedia_go.html", types.ContentTypeReference, "Go programming language Wikipedia page"},
-		{"TechBlog", "go_blog.html", types.ContentTypeTechnical, "Go blog with technical content"},
-		{"ErrorPage", "guardian.html", types.ContentTypeError, "Guardian 404 page"},
-		{"NewsArticle", "nytimes.html", types.ContentTypeArticle, "News article from NYTimes"},
-		{"PaywallContent", "data/edge_cases/paywall_content_test.html", types.ContentTypePaywall, "Article with paywall content"},
+		{"Wikipedia", "wikipedia_go.html", readabiligo.ContentTypeReference, "Go programming language Wikipedia page"},
+		{"TechBlog", "go_blog.html", readabiligo.ContentTypeTechnical, "Go blog with technical content"},
+		{"ErrorPage", "guardian.html", readabiligo.ContentTypeError, "Guardian 404 page"},
+		{"NewsArticle", "nytimes.html", readabiligo.ContentTypeArticle, "News article from NYTimes"},
+		{"PaywallContent", "data/edge_cases/paywall_content_test.html", readabiligo.ContentTypePaywall, "Article with paywall content"},
 	}
 
 	// Get the list of HTML files in the real_world directory
@@ -61,40 +60,40 @@ func TestContentTypeOptimizedExtraction(t *testing.T) {
 			require.NoError(t, err)
 			
 			// 1. Auto-detect content type
-			autoDetectExt := extractor.New(
-				extractor.WithDetectContentType(true),
+			autoDetectExt := readabiligo.New(
+				readabiligo.WithDetectContentType(true),
 			)
 			autoDetectArticle, err := autoDetectExt.ExtractFromHTML(string(htmlContent), nil)
 			require.NoError(t, err)
 			
 			// 2. Force specific content type
-			forcedTypeExt := extractor.New(
-				extractor.WithDetectContentType(false),
-				extractor.WithContentType(tc.contentType),
+			forcedTypeExt := readabiligo.New(
+				readabiligo.WithDetectContentType(false),
+				readabiligo.WithContentType(tc.contentType),
 			)
 			forcedTypeArticle, err := forcedTypeExt.ExtractFromHTML(string(htmlContent), nil)
 			require.NoError(t, err)
 			
 			// 3. Use opposite content type for comparison
-			var oppositeType types.ContentType
+			var oppositeType readabiligo.ContentType
 			switch tc.contentType {
-			case types.ContentTypeReference:
-				oppositeType = types.ContentTypeArticle
-			case types.ContentTypeTechnical:
-				oppositeType = types.ContentTypeArticle
-			case types.ContentTypeError:
-				oppositeType = types.ContentTypeArticle
-			case types.ContentTypeArticle:
-				oppositeType = types.ContentTypeReference
-			case types.ContentTypePaywall:
-				oppositeType = types.ContentTypeArticle
+			case readabiligo.ContentTypeReference:
+				oppositeType = readabiligo.ContentTypeArticle
+			case readabiligo.ContentTypeTechnical:
+				oppositeType = readabiligo.ContentTypeArticle
+			case readabiligo.ContentTypeError:
+				oppositeType = readabiligo.ContentTypeArticle
+			case readabiligo.ContentTypeArticle:
+				oppositeType = readabiligo.ContentTypeReference
+			case readabiligo.ContentTypePaywall:
+				oppositeType = readabiligo.ContentTypeArticle
 			default:
-				oppositeType = types.ContentTypeArticle
+				oppositeType = readabiligo.ContentTypeArticle
 			}
 			
-			oppositeTypeExt := extractor.New(
-				extractor.WithDetectContentType(false),
-				extractor.WithContentType(oppositeType),
+			oppositeTypeExt := readabiligo.New(
+				readabiligo.WithDetectContentType(false),
+				readabiligo.WithContentType(oppositeType),
 			)
 			oppositeTypeArticle, err := oppositeTypeExt.ExtractFromHTML(string(htmlContent), nil)
 			require.NoError(t, err)
@@ -168,25 +167,25 @@ func TestContentTypeOptimizedExtraction(t *testing.T) {
 			
 			// Perform content-type specific assertions
 			switch tc.contentType {
-			case types.ContentTypeReference:
+			case readabiligo.ContentTypeReference:
 				// Reference content should preserve more structure
 				assert.True(t, optimalHeadingCount >= oppositeHeadingCount, 
 					"Reference content should preserve headings better")
 				assert.True(t, optimalListItemCount >= oppositeListItemCount, 
 					"Reference content should preserve list items better")
 				
-			case types.ContentTypeError:
+			case readabiligo.ContentTypeError:
 				// Error pages should have less navigation
 				assert.True(t, optimalNavCount <= oppositeNavCount, 
 					"Error page mode should remove more navigation elements")
 				
-			case types.ContentTypeTechnical:
+			case readabiligo.ContentTypeTechnical:
 				// Technical content should preserve code blocks (not easily testable)
 				// but should have better structure preservation than generic article
 				assert.True(t, optimalHeadingCount >= oppositeHeadingCount, 
 					"Technical content should preserve heading structure")
 					
-			case types.ContentTypePaywall:
+			case readabiligo.ContentTypePaywall:
 				// Paywall content should preserve premium content
 				// Count premium content indicators
 				optimalPremiumContent := countElements(optimalDoc, ".premium-content, .paid-content, [class*='premium'], [class*='paid']", "Premium content")
@@ -235,15 +234,15 @@ func TestPaywallContentExtraction(t *testing.T) {
 	// Test with and without paywall content handling
 	extractors := []struct {
 		name                string
-		extractor           extractor.Extractor
+		extractor           readabiligo.Extractor
 		expectedContentType string
 		expectedElements    map[string]int  // Expected element counts
 		expectedContent     map[string]bool // Expected content presence
 	}{
 		{
 			name: "Default Extraction (No content type)",
-			extractor: extractor.New(
-				extractor.WithDetectContentType(false),
+			extractor: readabiligo.New(
+				readabiligo.WithDetectContentType(false),
 			),
 			expectedContentType: "Article", // With no content type, the system defaults to Article
 			expectedElements: map[string]int{
@@ -260,8 +259,8 @@ func TestPaywallContentExtraction(t *testing.T) {
 		},
 		{
 			name: "Content Type Detection Enabled",
-			extractor: extractor.New(
-				extractor.WithDetectContentType(true),
+			extractor: readabiligo.New(
+				readabiligo.WithDetectContentType(true),
 			),
 			expectedContentType: "Paywall",
 			expectedElements: map[string]int{
@@ -278,9 +277,9 @@ func TestPaywallContentExtraction(t *testing.T) {
 		},
 		{
 			name: "Forced Paywall Content Type",
-			extractor: extractor.New(
-				extractor.WithDetectContentType(false),
-				extractor.WithContentType(types.ContentTypePaywall),
+			extractor: readabiligo.New(
+				readabiligo.WithDetectContentType(false),
+				readabiligo.WithContentType(readabiligo.ContentTypePaywall),
 			),
 			expectedContentType: "Paywall",
 			expectedElements: map[string]int{
@@ -297,9 +296,9 @@ func TestPaywallContentExtraction(t *testing.T) {
 		},
 		{
 			name: "Forced Article Content Type",
-			extractor: extractor.New(
-				extractor.WithDetectContentType(false),
-				extractor.WithContentType(types.ContentTypeArticle),
+			extractor: readabiligo.New(
+				readabiligo.WithDetectContentType(false),
+				readabiligo.WithContentType(readabiligo.ContentTypeArticle),
 			),
 			expectedContentType: "Article", 
 			expectedElements: map[string]int{

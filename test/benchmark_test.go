@@ -6,8 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrjoshuak/readabiligo/extractor"
-	"github.com/mrjoshuak/readabiligo/types"
+	"github.com/mrjoshuak/readabiligo"
 )
 
 // BenchmarkDefaultExtraction benchmarks the entire extraction process with default options
@@ -55,7 +54,7 @@ func BenchmarkDefaultExtraction(b *testing.B) {
 			htmlContent := string(htmlBytes)
 
 			// Create the extractor with default options
-			ext := extractor.New()
+			ext := readabiligo.New()
 
 			// Reset the timer before the loop
 			b.ResetTimer()
@@ -77,13 +76,13 @@ func BenchmarkContentTypeAwareExtraction(b *testing.B) {
 	benchCases := []struct {
 		name        string
 		filename    string
-		contentType types.ContentType
+		contentType readabiligo.ContentType
 	}{
-		{"Reference", "real_world/wikipedia_go.html", types.ContentTypeReference},
-		{"Article", "real_world/bbc_news.html", types.ContentTypeArticle},
-		{"Technical", "real_world/mdn_js_intro.html", types.ContentTypeTechnical},
-		{"Minimal", "edge_cases/minimal_content_test.html", types.ContentTypeMinimal},
-		{"Error", "non_article_full_page.html", types.ContentTypeError},
+		{"Reference", "real_world/wikipedia_go.html", readabiligo.ContentTypeReference},
+		{"Article", "real_world/bbc_news.html", readabiligo.ContentTypeArticle},
+		{"Technical", "real_world/mdn_js_intro.html", readabiligo.ContentTypeTechnical},
+		{"Minimal", "edge_cases/minimal_content_test.html", readabiligo.ContentTypeMinimal},
+		{"Error", "non_article_full_page.html", readabiligo.ContentTypeError},
 	}
 
 	for _, bc := range benchCases {
@@ -109,8 +108,8 @@ func BenchmarkContentTypeAwareExtraction(b *testing.B) {
 			htmlContent := string(htmlBytes)
 
 			// Create the extractor with content type detection enabled
-			ext := extractor.New(
-				extractor.WithDetectContentType(true),
+			ext := readabiligo.New(
+				readabiligo.WithDetectContentType(true),
 			)
 
 			// Reset the timer before the loop
@@ -143,9 +142,9 @@ func BenchmarkContentTypeAwareExtraction(b *testing.B) {
 			htmlContent := string(htmlBytes)
 
 			// Create the extractor with explicit content type
-			ext := extractor.New(
-				extractor.WithDetectContentType(false),
-				extractor.WithContentType(bc.contentType),
+			ext := readabiligo.New(
+				readabiligo.WithDetectContentType(false),
+				readabiligo.WithContentType(bc.contentType),
 			)
 
 			// Reset the timer before the loop
@@ -197,10 +196,10 @@ func BenchmarkFeatureOverhead(b *testing.B) {
 	for _, feature := range features {
 		b.Run(feature.name, func(b *testing.B) {
 			// Create the extractor with specified features
-			ext := extractor.New(
-				extractor.WithContentDigests(feature.contentDigests),
-				extractor.WithNodeIndexes(feature.nodeIndexes),
-				extractor.WithPreserveImportantLinks(feature.preserveLinks),
+			ext := readabiligo.New(
+				readabiligo.WithContentDigests(feature.contentDigests),
+				readabiligo.WithNodeIndexes(feature.nodeIndexes),
+				readabiligo.WithPreserveImportantLinks(feature.preserveLinks),
 			)
 
 			// Reset the timer before the loop
@@ -249,7 +248,7 @@ func BenchmarkDOMOperations(b *testing.B) {
 			htmlContent := string(htmlBytes)
 
 			// Create the extractor with default options
-			ext := extractor.New()
+			ext := readabiligo.New()
 
 			// Extract just once for benchmark preparation
 			article, err := ext.ExtractFromHTML(htmlContent, nil)
@@ -263,7 +262,7 @@ func BenchmarkDOMOperations(b *testing.B) {
 			// Benchmark the DOM operations by extracting again with a timeout
 			// This forces the operation to run each time but without completing it
 			for i := 0; i < b.N; i++ {
-				options := types.DefaultOptions()
+				options := readabiligo.DefaultOptions()
 				options.Timeout = 100 * time.Millisecond
 				_, _ = ext.ExtractFromHTML(htmlContent, &options)
 			}
@@ -309,8 +308,8 @@ func BenchmarkTimeoutImpact(b *testing.B) {
 	for _, timeout := range timeouts {
 		b.Run(timeout.name, func(b *testing.B) {
 			// Create the extractor with the specified timeout
-			ext := extractor.New(
-				extractor.WithTimeout(timeout.timeout),
+			ext := readabiligo.New(
+				readabiligo.WithTimeout(timeout.timeout),
 			)
 
 			// Reset the timer before the loop
@@ -365,8 +364,8 @@ func BenchmarkMemoryUsage(b *testing.B) {
 				htmlContent := string(htmlBytes)
 
 				// Create the extractor with specified buffer size
-				ext := extractor.New(
-					extractor.WithMaxBufferSize(bufferSize.bufferSize),
+				ext := readabiligo.New(
+					readabiligo.WithMaxBufferSize(bufferSize.bufferSize),
 				)
 
 				// Reset the timer before the loop

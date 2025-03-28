@@ -7,7 +7,7 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/mrjoshuak/readabiligo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -78,9 +78,9 @@ func TestEdgeCaseExtraction(t *testing.T) {
 // testFooterHandling tests proper handling of various footer elements
 func testFooterHandling(t *testing.T, htmlContent string) {
 	// Create extractors with different options
-	standardExt := extractor.New()
-	preserveLinksExt := extractor.New(
-		extractor.WithPreserveImportantLinks(true),
+	standardExt := readabiligo.New()
+	preserveLinksExt := readabiligo.New(
+		readabiligo.WithPreserveImportantLinks(true),
 	)
 
 	// Extract with standard options (should remove all footers)
@@ -129,7 +129,7 @@ func testFooterHandling(t *testing.T, htmlContent string) {
 // testTableLayout tests extraction from table-based layouts
 func testTableLayout(t *testing.T, htmlContent string) {
 	// Create extractor
-	ext := extractor.New()
+	ext := readabiligo.New()
 	
 	// Extract content
 	article, err := ext.ExtractFromHTML(htmlContent, nil)
@@ -195,7 +195,7 @@ func testTableLayout(t *testing.T, htmlContent string) {
 // testNestedContent tests extraction from deeply nested div structures
 func testNestedContent(t *testing.T, htmlContent string) {
 	// Create extractor
-	ext := extractor.New()
+	ext := readabiligo.New()
 	
 	// Extract content
 	article, err := ext.ExtractFromHTML(htmlContent, nil)
@@ -246,7 +246,7 @@ func testNestedContent(t *testing.T, htmlContent string) {
 	assert.Equal(t, 0, footerCount, "Footer should be removed")
 	
 	// Check for important links - should be removed by default
-	ext = extractor.New(extractor.WithPreserveImportantLinks(true))
+	ext = readabiligo.New(readabiligo.WithPreserveImportantLinks(true))
 	preserveArticle, err := ext.ExtractFromHTML(htmlContent, nil)
 	require.NoError(t, err)
 	
@@ -261,9 +261,9 @@ func testNestedContent(t *testing.T, htmlContent string) {
 // testMinimalContent tests extraction from pages with minimal content like login pages
 func testMinimalContent(t *testing.T, htmlContent string) {
 	// Create extractors with standard and content-type-aware options
-	standardExt := extractor.New()
-	contentAwareExt := extractor.New(
-		extractor.WithDetectContentType(true),
+	standardExt := readabiligo.New()
+	contentAwareExt := readabiligo.New(
+		readabiligo.WithDetectContentType(true),
 	)
 	
 	// Extract with standard options
@@ -308,9 +308,9 @@ func testMinimalContent(t *testing.T, htmlContent string) {
 // testPaywallContent tests extraction from articles with content behind paywalls
 func testPaywallContent(t *testing.T, htmlContent string) {
 	// Create extractors with different options
-	standardExt := extractor.New()
-	contentAwareExt := extractor.New(
-		extractor.WithDetectContentType(true),
+	standardExt := readabiligo.New()
+	contentAwareExt := readabiligo.New(
+		readabiligo.WithDetectContentType(true),
 	)
 	
 	// Extract content

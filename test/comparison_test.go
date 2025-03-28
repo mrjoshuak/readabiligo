@@ -10,8 +10,7 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/mrjoshuak/readabiligo/extractor"
-	"github.com/mrjoshuak/readabiligo/types"
+	"github.com/mrjoshuak/readabiligo"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -214,17 +213,17 @@ func TestSystematicComparisonWithDifferentOptions(t *testing.T) {
 	// Create different extractor configurations to test
 	extractorConfigs := []struct {
 		name   string
-		config func() extractor.Extractor
+		config func() readabiligo.Extractor
 	}{
-		{"Default", func() extractor.Extractor { return extractor.New() }},
-		{"WithPreserveImportantLinks", func() extractor.Extractor { 
-			return extractor.New(extractor.WithPreserveImportantLinks(true)) 
+		{"Default", func() readabiligo.Extractor { return readabiligo.New() }},
+		{"WithPreserveImportantLinks", func() readabiligo.Extractor { 
+			return readabiligo.New(readabiligo.WithPreserveImportantLinks(true)) 
 		}},
-		{"WithContentDigests", func() extractor.Extractor { 
-			return extractor.New(extractor.WithContentDigests(true)) 
+		{"WithContentDigests", func() readabiligo.Extractor { 
+			return readabiligo.New(readabiligo.WithContentDigests(true)) 
 		}},
-		{"WithNodeIndexes", func() extractor.Extractor { 
-			return extractor.New(extractor.WithNodeIndexes(true)) 
+		{"WithNodeIndexes", func() readabiligo.Extractor { 
+			return readabiligo.New(readabiligo.WithNodeIndexes(true)) 
 		}},
 	}
 
@@ -242,7 +241,7 @@ func TestSystematicComparisonWithDifferentOptions(t *testing.T) {
 			require.NoError(t, err)
 
 			// Create a baseline result using the default extractor
-			baselineExtractor := extractor.New()
+			baselineExtractor := readabiligo.New()
 			baseline, err := baselineExtractor.ExtractFromHTML(string(htmlContent), nil)
 			require.NoError(t, err)
 
@@ -309,12 +308,12 @@ func TestSemanticDOMCompare(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Extract with default options
-			defaultExt := extractor.New()
+			defaultExt := readabiligo.New()
 			defaultArticle, err := defaultExt.ExtractFromHTML(string(htmlContent), nil)
 			assert.NoError(t, err)
 
 			// Extract with preserve important links option
-			preserveExt := extractor.New(extractor.WithPreserveImportantLinks(true))
+			preserveExt := readabiligo.New(readabiligo.WithPreserveImportantLinks(true))
 			preserveArticle, err := preserveExt.ExtractFromHTML(string(htmlContent), nil)
 			assert.NoError(t, err)
 
@@ -335,13 +334,13 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 	testCases := []struct {
 		name        string
 		htmlCase    string
-		contentType types.ContentType
+		contentType readabiligo.ContentType
 	}{
-		{"Wikipedia", "Wikipedia", types.ContentTypeReference},
-		{"BlogPost", "BlogPost", types.ContentTypeArticle},
-		{"NewsArticle", "NewsArticle", types.ContentTypeArticle},
-		{"TechnicalContent", "ComplexLayout", types.ContentTypeTechnical},
-		{"ErrorPage", "ErrorPage", types.ContentTypeError},
+		{"Wikipedia", "Wikipedia", readabiligo.ContentTypeReference},
+		{"BlogPost", "BlogPost", readabiligo.ContentTypeArticle},
+		{"NewsArticle", "NewsArticle", readabiligo.ContentTypeArticle},
+		{"TechnicalContent", "ComplexLayout", readabiligo.ContentTypeTechnical},
+		{"ErrorPage", "ErrorPage", readabiligo.ContentTypeError},
 	}
 
 	// Create a temporary directory for test files
@@ -365,16 +364,16 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 			assert.NoError(t, err)
 
 			// Test with auto-detection
-			autoDetectExt := extractor.New(
-				extractor.WithDetectContentType(true),
+			autoDetectExt := readabiligo.New(
+				readabiligo.WithDetectContentType(true),
 			)
 			autoDetectArticle, err := autoDetectExt.ExtractFromHTML(htmlContent, nil)
 			assert.NoError(t, err)
 
 			// Test with forced content type
-			forcedTypeExt := extractor.New(
-				extractor.WithDetectContentType(false),
-				extractor.WithContentType(tc.contentType),
+			forcedTypeExt := readabiligo.New(
+				readabiligo.WithDetectContentType(false),
+				readabiligo.WithContentType(tc.contentType),
 			)
 			forcedTypeArticle, err := forcedTypeExt.ExtractFromHTML(htmlContent, nil)
 			assert.NoError(t, err)
@@ -389,7 +388,7 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 
 			// For error pages and reference content, we expect significant differences
 			// due to different cleaning strategies, so don't compare DOM directly
-			if tc.contentType != types.ContentTypeError && tc.contentType != types.ContentTypeReference {
+			if tc.contentType != readabiligo.ContentTypeError && tc.contentType != readabiligo.ContentTypeReference {
 				compareDOMContent(t, autoDetectContent, forcedTypeContent)
 			} else {
 				// Just log the content lengths
@@ -398,7 +397,7 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 			}
 			
 			// For error pages, verify aggressive cleaning was applied
-			if tc.contentType == types.ContentTypeError {
+			if tc.contentType == readabiligo.ContentTypeError {
 				// Parse the content to check for navigation elements
 				autoDetectDoc, _ := goquery.NewDocumentFromReader(strings.NewReader(autoDetectContent))
 				forcedTypeDoc, _ := goquery.NewDocumentFromReader(strings.NewReader(forcedTypeContent))
@@ -416,7 +415,7 @@ func TestContentTypeAwareExtraction(t *testing.T) {
 			}
 			
 			// For reference content, verify structure preservation
-			if tc.contentType == types.ContentTypeReference {
+			if tc.contentType == readabiligo.ContentTypeReference {
 				// Check heading and list preservation
 				autoDetectDoc, _ := goquery.NewDocumentFromReader(strings.NewReader(autoDetectContent))
 				forcedTypeDoc, _ := goquery.NewDocumentFromReader(strings.NewReader(forcedTypeContent))
@@ -560,9 +559,9 @@ with open(sys.argv[2], 'w', encoding='utf-8') as f:
 // runGoReadability runs our Go implementation and returns the result
 func runGoReadability(html string) (map[string]interface{}, error) {
 	// Create a new extractor with pure Go implementation
-	ex := extractor.New(
-		extractor.WithContentDigests(false),
-		extractor.WithDetectContentType(true), // Enable content type detection
+	ex := readabiligo.New(
+		readabiligo.WithContentDigests(false),
+		readabiligo.WithDetectContentType(true), // Enable content type detection
 	)
 
 	// Extract the article

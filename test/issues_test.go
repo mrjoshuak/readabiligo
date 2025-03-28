@@ -5,7 +5,7 @@ import (
 	"testing"
 
 	"github.com/PuerkitoBio/goquery"
-	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/mrjoshuak/readabiligo"
 	"github.com/mrjoshuak/readabiligo/internal/readability"
 	"github.com/stretchr/testify/assert"
 )
@@ -27,10 +27,10 @@ func TestExampleDomainMoreInfoLink(t *testing.T) {
 </html>`
 
 	// Create a new extractor with pure Go implementation
-	ex := extractor.New(
-		extractor.WithReadability(false),
-		extractor.WithContentDigests(false),
-		extractor.WithPreserveImportantLinks(true), // Enable important link preservation
+	ex := readabiligo.New(
+		readabiligo.WithReadability(false),
+		readabiligo.WithContentDigests(false),
+		readabiligo.WithPreserveImportantLinks(true), // Enable important link preservation
 	)
 
 	// Extract the article
@@ -332,15 +332,15 @@ func TestLinkPreservation(t *testing.T) {
 </html>`
 
 	// Create a new extractor with link preservation enabled
-	preserveExtractor := extractor.New(
-		extractor.WithContentDigests(false),
-		extractor.WithPreserveImportantLinks(true), // Enable link preservation
+	preserveExtractor := readabiligo.New(
+		readabiligo.WithContentDigests(false),
+		readabiligo.WithPreserveImportantLinks(true), // Enable link preservation
 	)
 
 	// Create a new extractor with link preservation disabled
-	noPreserveExtractor := extractor.New(
-		extractor.WithContentDigests(false),
-		extractor.WithPreserveImportantLinks(false), // Disable link preservation
+	noPreserveExtractor := readabiligo.New(
+		readabiligo.WithContentDigests(false),
+		readabiligo.WithPreserveImportantLinks(false), // Disable link preservation
 	)
 
 	// Extract using both configurations
@@ -395,9 +395,9 @@ func TestEnhancedImportantLinksPreservation(t *testing.T) {
 </html>`
 
 	// Use the public API extractor with important link preservation enabled
-	ex := extractor.New(
-		extractor.WithContentDigests(false),
-		extractor.WithPreserveImportantLinks(true), // Enable link preservation (comma here)
+	ex := readabiligo.New(
+		readabiligo.WithContentDigests(false),
+		readabiligo.WithPreserveImportantLinks(true), // Enable link preservation (comma here)
 		// Debug is not exposed through extractor API, use debug flag on readability options
 	)
 	
@@ -490,7 +490,7 @@ func TestDeeplyNestedContentExtraction(t *testing.T) {
 </html>`
 
 	// Create extractor with default options
-	ex := extractor.New()
+	ex := readabiligo.New()
 	
 	// Extract the article
 	article, err := ex.ExtractFromHTML(html, nil)

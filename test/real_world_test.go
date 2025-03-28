@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mrjoshuak/readabiligo/extractor"
+	"github.com/mrjoshuak/readabiligo"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -37,7 +37,7 @@ func TestRealWorldExamples(t *testing.T) {
 	}
 
 	// Create the extractor with default options
-	ext := extractor.New()
+	ext := readabiligo.New()
 
 	// Test each real-world example
 	for _, file := range files {
@@ -119,9 +119,9 @@ func TestMultipleExtractionOptions(t *testing.T) {
 	}
 
 	// Create the extractors with different options
-	defaultExt := extractor.New()
-	preserveLinksExt := extractor.New(
-		extractor.WithPreserveImportantLinks(true),
+	defaultExt := readabiligo.New()
+	preserveLinksExt := readabiligo.New(
+		readabiligo.WithPreserveImportantLinks(true),
 	)
 
 	// Test each real-world example
@@ -190,9 +190,9 @@ func TestBenchmarkRealWorld(t *testing.T) {
 	}
 
 	// Create the extractors with different options
-	defaultExt := extractor.New()
-	digestExt := extractor.New(
-		extractor.WithContentDigests(true),
+	defaultExt := readabiligo.New()
+	digestExt := readabiligo.New(
+		readabiligo.WithContentDigests(true),
 	)
 
 	// Test each real-world example
