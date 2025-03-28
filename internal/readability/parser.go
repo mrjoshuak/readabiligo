@@ -1,8 +1,6 @@
 package readability
 
-import (
-	"github.com/mrjoshuak/readabiligo/types"
-)
+// No imports needed here
 
 // ParseHTMLWithReadability parses HTML content using the Readability algorithm
 // This is the preferred entry point for parsing HTML content with the internal readability package
@@ -42,6 +40,6 @@ func Parse(html string) (*ReadabilityArticle, error) {
 
 // ToStandardArticleV2 is an alias for ToStandardArticle in adapter.go
 // This method exists only to avoid compilation errors after refactoring
-func (r *ReadabilityArticle) ToStandardArticleV2() *types.Article {
+func (r *ReadabilityArticle) ToStandardArticleV2() *Article {
 	return r.ToStandardArticle()
 }

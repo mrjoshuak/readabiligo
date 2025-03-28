@@ -15,12 +15,40 @@ package readability
 import (
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
-	"github.com/mrjoshuak/readabiligo/types"
 )
+
+// ExtractionOptions represents options for extraction 
+type ExtractionOptions struct {
+	UseReadability        bool
+	ContentDigests        bool
+	NodeIndexes           bool
+	MaxBufferSize         int
+	Timeout               int
+	PreserveImportantLinks bool
+	DetectContentType     bool
+	ContentType           ContentType
+}
+
+// Article represents the extracted content
+type Article struct {
+	Title        string
+	Byline       string
+	Date         interface{}
+	Content      string
+	PlainContent string
+	PlainText    []Block
+	ContentType  ContentType
+}
+
+// Block represents a block of text
+type Block struct {
+	Text      string
+	NodeIndex string
+}
 
 // ExtractFromHTML extracts readable content from HTML using pure Go Readability
 // This function adapts our implementation to match the expected interface
-func ExtractFromHTML(html string, options *types.ExtractionOptions) (*types.Article, error) {
+func ExtractFromHTML(html string, options *ExtractionOptions) (*Article, error) {
 	// Set options for Readability parser
 	opts := defaultReadabilityOptions()
 	if options != nil {
@@ -46,7 +74,7 @@ func ExtractFromHTML(html string, options *types.ExtractionOptions) (*types.Arti
 	result := readabilityArticle.ToStandardArticle()
 	
 	// Set the detected content type in the result
-	result.ContentType = types.ContentType(readabilityArticle.ContentType)
+	result.ContentType = ContentType(readabilityArticle.ContentType)
 
 	// Generate plain content with content digests and node indexes if requested
 	plainContent, err := simplifiers.PlainContent(result.Content, options.ContentDigests, options.NodeIndexes)
@@ -72,12 +100,12 @@ func ParseHTML(html string, opts *ReadabilityOptions) (*ReadabilityArticle, erro
 }
 
 // ToStandardArticle converts a ReadabilityArticle to the standard Article type
-func (ra *ReadabilityArticle) ToStandardArticle() *types.Article {
-	article := &types.Article{
+func (ra *ReadabilityArticle) ToStandardArticle() *Article {
+	article := &Article{
 		Title:        ra.Title,
 		Byline:       ra.Byline,
 		Content:      ra.Content,
-		ContentType:  types.ContentType(ra.ContentType),
+		ContentType:  ContentType(ra.ContentType),
 	}
 	
 	// Set publication date if available
@@ -89,13 +117,13 @@ func (ra *ReadabilityArticle) ToStandardArticle() *types.Article {
 }
 
 // extractTextBlocks creates a slice of Block objects from HTML content
-func extractTextBlocks(html string) []types.Block {
+func extractTextBlocks(html string) []Block {
 	r, err := NewFromHTML(html, nil)
 	if err != nil {
-		return []types.Block{}
+		return []Block{}
 	}
 
-	blocks := []types.Block{}
+	blocks := []Block{}
 	r.doc.Find("p, li").Each(func(i int, s *goquery.Selection) {
 		text := getInnerText(s, true)
 		if text == "" {
@@ -103,7 +131,7 @@ func extractTextBlocks(html string) []types.Block {
 		}
 
 		// Create block with text
-		block := types.Block{
+		block := Block{
 			Text: text,
 		}
 

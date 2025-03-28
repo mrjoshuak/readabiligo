@@ -5,11 +5,16 @@ import (
 
 	"github.com/PuerkitoBio/goquery"
 	"github.com/mrjoshuak/readabiligo/internal/simplifiers"
-	"github.com/mrjoshuak/readabiligo/types"
 )
 
+// Block represents a text block
+type Block struct {
+	Text      string
+	NodeIndex string
+}
+
 // ExtractTextBlocks extracts plain text blocks from HTML content
-func ExtractTextBlocks(html string, useReadability bool) []types.Block {
+func ExtractTextBlocks(html string, useReadability bool) []Block {
 	if useReadability {
 		return extractTextBlocksJS(html)
 	}
@@ -17,7 +22,7 @@ func ExtractTextBlocks(html string, useReadability bool) []types.Block {
 }
 
 // extractTextBlocksJS extracts text blocks from HTML content using JavaScript-like approach
-func extractTextBlocksJS(html string) []types.Block {
+func extractTextBlocksJS(html string) []Block {
 	// Load article as DOM
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
@@ -25,7 +30,7 @@ func extractTextBlocksJS(html string) []types.Block {
 	}
 
 	// Select all text blocks
-	var textBlocks []types.Block
+	var textBlocks []Block
 	doc.Find("*").Each(func(_ int, s *goquery.Selection) {
 		// Skip elements with no text
 		if s.Text() == "" {
@@ -40,7 +45,7 @@ func extractTextBlocksJS(html string) []types.Block {
 		}
 
 		// Create a block with the text
-		block := types.Block{
+		block := Block{
 			Text: text,
 		}
 
@@ -56,7 +61,7 @@ func extractTextBlocksJS(html string) []types.Block {
 }
 
 // extractTextBlocksAsPlainText extracts text blocks from HTML content as plain text
-func extractTextBlocksAsPlainText(html string) []types.Block {
+func extractTextBlocksAsPlainText(html string) []Block {
 	// Load article as DOM
 	doc, err := goquery.NewDocumentFromReader(strings.NewReader(html))
 	if err != nil {
@@ -80,7 +85,7 @@ func extractTextBlocksAsPlainText(html string) []types.Block {
 	})
 
 	// Select all text blocks
-	var textBlocks []types.Block
+	var textBlocks []Block
 	doc.Find("*").Each(func(_ int, s *goquery.Selection) {
 		// Skip elements with no text
 		if s.Text() == "" {
@@ -95,7 +100,7 @@ func extractTextBlocksAsPlainText(html string) []types.Block {
 		}
 
 		// Create a block with the text
-		block := types.Block{
+		block := Block{
 			Text: text,
 		}
 

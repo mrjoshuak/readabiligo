@@ -1,7 +1,14 @@
-// Package types provides the core data structures for the ReadabiliGo library.
-package types
+// Package readabiligo provides a Go implementation of Mozilla's Readability.js library
+// for extracting the main content from HTML pages.
+package readabiligo
 
 import "time"
+
+// Version information for the ReadabiliGo library.
+const (
+	Version = "0.3.0" // Updated version for JavaScript bridge removal
+	Name    = "ReadabiliGo"
+)
 
 // Block represents a block of text with optional metadata.
 // It is used to store paragraphs of plain text extracted from an article,
@@ -87,5 +94,23 @@ func DefaultOptions() ExtractionOptions {
 		PreserveImportantLinks: false, // Default to false to match ReadabiliPy behavior
 		DetectContentType:    true,    // Enable content type detection by default
 		ContentType:          ContentTypeUnknown, // Auto-detect by default
+	}
+}
+
+// BuildInfo contains version and build information for the ReadabiliGo library.
+// It includes the version number, name, and Go version used to build the library.
+type BuildInfo struct {
+	Version   string
+	Name      string
+	GoVersion string
+}
+
+// GetBuildInfo returns the current version information for the ReadabiliGo library.
+// This is useful for displaying version information in logs or help output.
+func GetBuildInfo() BuildInfo {
+	return BuildInfo{
+		Version:   Version,
+		Name:      Name,
+		GoVersion: "go1.22", // TODO: Make this dynamic
 	}
 }
