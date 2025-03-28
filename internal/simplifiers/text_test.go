@@ -1,6 +1,7 @@
 package simplifiers
 
 import (
+	"strings"
 	"testing"
 )
 
@@ -172,4 +173,138 @@ func TestIsControlCategory(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Test data for benchmarks
+var (
+	// Short text for benchmarking simple operations
+	shortText = "This is a short text with some special characters: " +
+		"\u2013 \u2014 \u2018 \u2019 \u201c \u201d \u2026 \u00a0 \u00ad " +
+		"\u2022 \u2023 \u2043 \u2212 \u00b7 \u00b0 \u00ae \u00a9 \u2122"
+
+	// Medium text with a mix of normal text and special characters
+	mediumText = strings.Repeat("This is a paragraph with special chars: "+
+		"\u2013 \u2014 \u2018 \u2019 \u201c \u201d \u2026 \u00a0 \u00ad "+
+		"and some control characters: \u0001 \u0002 \u0003 \u0004 \u0005 "+
+		"and lots of spaces and tabs:     \t    \t    \n\r\n\r\n\r\n\r\n\r\n\r\n", 10)
+
+	// Long text with many special characters and HTML-like content
+	longText = strings.Repeat("<div> <p> This is a longer text with many " +
+		"special characters: \u2013 \u2014 \u2018 \u2019 \u201c \u201d \u2026 "+
+		"\u00a0 \u00ad \u2022 \u2023 \u2043 \u2212 \u00b7 \u00b0 \u00ae \u00a9 "+
+		"\u2122 and     lots  of   spaces \t\t\t and \r\n\r\n\r\n newlines "+
+		"as well as HTML-like content: < span > test < / span > </p> </div>", 50)
+
+	// Text with HTML entities
+	htmlText = strings.Repeat("This text has HTML entities: &lt;div&gt; " +
+		"&amp; &quot;quoted text&quot; &apos;single quotes&apos; &mdash; " +
+		"&ndash; &hellip; &lsquo;left single quote&rsquo; &ldquo;left double " +
+		"quote&rdquo; &bull; &middot; &plusmn; &times; &divide; &not; &micro; " +
+		"&para; &degree; &frac14; &frac12; &frac34; &iquest; &iexcl; &szlig; " +
+		"&agrave; &aacute; &acirc; &atilde; &auml; &aring; &aelig; &ccedil; " +
+		"&egrave; &eacute; &ecirc; &euml; &igrave; &iacute; &icirc; &iuml; " +
+		"&ntilde; &ograve; &oacute; &ocirc; &otilde; &ouml; &oslash; &ugrave; " +
+		"&uacute; &ucirc; &uuml; &yacute; &yuml; &thorn; &eth;", 5)
+)
+
+// BenchmarkNormalizeUnicode benchmarks Unicode normalization
+func BenchmarkNormalizeUnicode(b *testing.B) {
+	b.Run("ShortText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeUnicode(shortText)
+		}
+	})
+
+	b.Run("MediumText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeUnicode(mediumText)
+		}
+	})
+
+	b.Run("LongText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeUnicode(longText)
+		}
+	})
+}
+
+// BenchmarkNormalizeWhitespace benchmarks whitespace normalization
+func BenchmarkNormalizeWhitespace(b *testing.B) {
+	b.Run("ShortText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeWhitespace(shortText)
+		}
+	})
+
+	b.Run("MediumText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeWhitespace(mediumText)
+		}
+	})
+
+	b.Run("LongText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeWhitespace(longText)
+		}
+	})
+}
+
+// BenchmarkStripControlChars benchmarks control character removal
+func BenchmarkStripControlChars(b *testing.B) {
+	b.Run("ShortText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			StripControlChars(shortText)
+		}
+	})
+
+	b.Run("MediumText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			StripControlChars(mediumText)
+		}
+	})
+
+	b.Run("LongText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			StripControlChars(longText)
+		}
+	})
+}
+
+// BenchmarkNormalizeText benchmarks the full text normalization process
+func BenchmarkNormalizeText(b *testing.B) {
+	b.Run("ShortText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeText(shortText)
+		}
+	})
+
+	b.Run("MediumText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeText(mediumText)
+		}
+	})
+
+	b.Run("LongText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			NormalizeText(longText)
+		}
+	})
+}
+
+// BenchmarkDecodeHtmlEntities benchmarks HTML entity decoding
+func BenchmarkDecodeHtmlEntities(b *testing.B) {
+	b.Run("HtmlText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			DecodeHtmlEntities(htmlText)
+		}
+	})
+}
+
+// BenchmarkStripHTMLWhitespace benchmarks HTML whitespace removal
+func BenchmarkStripHTMLWhitespace(b *testing.B) {
+	b.Run("HtmlText", func(b *testing.B) {
+		for i := 0; i < b.N; i++ {
+			StripHTMLWhitespace(htmlText)
+		}
+	})
 }
