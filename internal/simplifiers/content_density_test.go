@@ -7,6 +7,11 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
+func init() {
+	// Clear cache before running tests to ensure clean state
+	clearGlobalCache()
+}
+
 func TestAnalyzeContentDensity(t *testing.T) {
 	html := `
 		<div id="content">
