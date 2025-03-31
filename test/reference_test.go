@@ -2,7 +2,6 @@ package test
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -68,10 +67,14 @@ func TestComparisonWithPythonReference(t *testing.T) {
 			err = json.Unmarshal(jsonContent, &expectedOutput)
 			require.NoError(t, err)
 
-			// Run the Go implementation
-			article, err := readabiligo.FromReader(strings.NewReader(string(htmlContent)), nil)
+			// Run the Go implementation using the existing helper function
+			ex := readabiligo.New(
+				readabiligo.WithContentDigests(false),
+				readabiligo.WithDetectContentType(true),
+			)
+			article, err := ex.ExtractFromHTML(string(htmlContent), nil)
 			require.NoError(t, err)
-
+			
 			// Prepare our output to compare
 			goOutput := map[string]interface{}{
 				"title":   article.Title,
@@ -123,14 +126,14 @@ func TestComparisonWithPythonReference(t *testing.T) {
 			goContent, hasGoContent := goOutput["content"].(string)
 
 			if hasExpectedContent && hasGoContent {
-				compareContent(t, expectedContent, goContent)
+				compareRefContent(t, expectedContent, goContent)
 			}
 		})
 	}
 }
 
-// compareContent performs detailed DOM comparison between expected and actual content
-func compareContent(t *testing.T, expected, actual string) {
+// compareRefContent performs detailed DOM comparison between expected and actual content
+func compareRefContent(t *testing.T, expected, actual string) {
 	// Parse HTML to DOM
 	expectedDoc, err := goquery.NewDocumentFromReader(strings.NewReader(expected))
 	require.NoError(t, err)
@@ -139,12 +142,12 @@ func compareContent(t *testing.T, expected, actual string) {
 	require.NoError(t, err)
 
 	// Compare element counts with some tolerance
-	compareElementCounts(t, expectedDoc, actualDoc, "p", "paragraphs")
-	compareElementCounts(t, expectedDoc, actualDoc, "a", "links")
-	compareElementCounts(t, expectedDoc, actualDoc, "h1, h2, h3, h4, h5, h6", "headings")
-	compareElementCounts(t, expectedDoc, actualDoc, "img", "images")
-	compareElementCounts(t, expectedDoc, actualDoc, "ul, ol", "lists")
-	compareElementCounts(t, expectedDoc, actualDoc, "li", "list items")
+	compareRefElementCounts(t, expectedDoc, actualDoc, "p", "paragraphs")
+	compareRefElementCounts(t, expectedDoc, actualDoc, "a", "links")
+	compareRefElementCounts(t, expectedDoc, actualDoc, "h1, h2, h3, h4, h5, h6", "headings")
+	compareRefElementCounts(t, expectedDoc, actualDoc, "img", "images")
+	compareRefElementCounts(t, expectedDoc, actualDoc, "ul, ol", "lists")
+	compareRefElementCounts(t, expectedDoc, actualDoc, "li", "list items")
 
 	// Compare text content
 	expectedText := normalizeText(expectedDoc.Text())
@@ -162,7 +165,7 @@ func compareContent(t *testing.T, expected, actual string) {
 		"Text content length differs significantly: expected between 70%% and 130%% of Python, got %.0f%%", ratio*100)
 
 	// Check for significant content overlap
-	similarityScore := calculateTextSimilarity(expectedText, actualText)
+	similarityScore := calculateRefTextSimilarity(expectedText, actualText)
 	t.Logf("Text similarity score: %.2f%%", similarityScore*100)
 	
 	// For reference tests, we expect higher similarity
@@ -170,8 +173,8 @@ func compareContent(t *testing.T, expected, actual string) {
 		"Text content similarity is too low: expected at least 50%%, got %.0f%%", similarityScore*100)
 }
 
-// compareElementCounts compares the number of elements matching a selector
-func compareElementCounts(t *testing.T, expectedDoc, actualDoc *goquery.Document, selector, description string) {
+// compareRefElementCounts compares the number of elements matching a selector
+func compareRefElementCounts(t *testing.T, expectedDoc, actualDoc *goquery.Document, selector, description string) {
 	expectedCount := expectedDoc.Find(selector).Length()
 	actualCount := actualDoc.Find(selector).Length()
 	
@@ -212,9 +215,9 @@ func normalizeText(text string) string {
 	return strings.ToLower(text)
 }
 
-// calculateTextSimilarity provides a simple similarity metric between two texts
+// calculateRefTextSimilarity provides a simple similarity metric between two texts
 // Returns a value between 0.0 (completely different) and 1.0 (identical)
-func calculateTextSimilarity(text1, text2 string) float64 {
+func calculateRefTextSimilarity(text1, text2 string) float64 {
 	// Split texts into words
 	words1 := strings.Fields(text1)
 	words2 := strings.Fields(text2)
@@ -238,13 +241,17 @@ func calculateTextSimilarity(text1, text2 string) float64 {
 	for word, count1 := range wordCount1 {
 		if count2, exists := wordCount2[word]; exists {
 			// Add minimum of the two counts
-			intersection += float64(min(count1, count2))
+			if count1 < count2 {
+				intersection += float64(count1)
+			} else {
+				intersection += float64(count2)
+			}
 		}
 	}
 	
 	// Calculate union size
 	var union float64
-	for word, count := range wordCount1 {
+	for _, count := range wordCount1 {
 		union += float64(count)
 	}
 	for word, count := range wordCount2 {
@@ -258,12 +265,4 @@ func calculateTextSimilarity(text1, text2 string) float64 {
 		return 0.0
 	}
 	return intersection / union
-}
-
-// min returns the minimum of two integers
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
 }
