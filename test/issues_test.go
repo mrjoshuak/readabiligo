@@ -28,7 +28,6 @@ func TestExampleDomainMoreInfoLink(t *testing.T) {
 
 	// Create a new extractor with pure Go implementation
 	ex := readabiligo.New(
-		readabiligo.WithReadability(false),
 		readabiligo.WithContentDigests(false),
 		readabiligo.WithPreserveImportantLinks(true), // Enable important link preservation
 	)

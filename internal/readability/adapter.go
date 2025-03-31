@@ -22,7 +22,6 @@ import (
 
 // ExtractionOptions represents options for extraction 
 type ExtractionOptions struct {
-	UseReadability        bool
 	ContentDigests        bool
 	NodeIndexes           bool
 	MaxBufferSize         int

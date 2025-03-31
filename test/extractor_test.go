@@ -67,8 +67,8 @@ func TestExtractFromFile(t *testing.T) {
 	}
 }
 
-// TestExtractWithReadability tests article extraction with Readability.js enabled
-func TestExtractWithReadability(t *testing.T) {
+// TestExtractWithPureGo tests article extraction with the pure Go implementation
+func TestExtractWithPureGo(t *testing.T) {
 	// Get the test data file
 	testFile := filepath.Join("data", "addictinginfo.com-1_full_page.html")
 
@@ -79,10 +79,8 @@ func TestExtractWithReadability(t *testing.T) {
 	}
 	defer file.Close()
 
-	// Create the extractor with Readability.js enabled
-	ext := readabiligo.New(
-		readabiligo.WithReadability(true),
-	)
+	// Create the extractor with default options
+	ext := readabiligo.New()
 
 	// Extract the article
 	article, err := ext.ExtractFromReader(file, nil)
@@ -486,8 +484,8 @@ func BenchmarkExtraction(b *testing.B) {
 	}
 }
 
-// BenchmarkExtractionWithReadability benchmarks article extraction with Readability.js
-func BenchmarkExtractionWithReadability(b *testing.B) {
+// BenchmarkExtractionWithSettings benchmarks article extraction with specific settings
+func BenchmarkExtractionWithSettings(b *testing.B) {
 	// Define benchmark cases
 	benchCases := []struct {
 		name     string
@@ -516,9 +514,9 @@ func BenchmarkExtractionWithReadability(b *testing.B) {
 			}
 			htmlContent := string(htmlBytes)
 
-			// Create the extractor with Readability.js enabled
+			// Create the extractor with specific settings
 			ext := readabiligo.New(
-				readabiligo.WithReadability(true),
+				readabiligo.WithContentDigests(true),
 			)
 
 			// Reset the timer before the loop

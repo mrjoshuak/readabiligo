@@ -2,7 +2,7 @@
 
 ReadabiliGo is a Go implementation of Mozilla's [Readability.js](https://github.com/mozilla/readability) library, designed to extract readable content from HTML pages. It provides both a command-line interface and a Go library for article extraction.
 
-This package is a Go port of [ReadabiliPy](https://github.com/alan-turing-institute/ReadabiliPy) by [The Alan Turing Institute](https://github.com/alan-turing-institute), Ed Chalstrey, James Robinson, Martin O'Reilly, Gertjan van den Burg, Nelson Liu, and many other valuable contributors. ReadabiliGo maintains compatibility with ReadabiliPy's output format and features while providing a native Go implementation.
+This package is a Go port of [ReadabiliPy](https://github.com/alan-turing-institute/ReadabiliPy) by [The Alan Turing Institute](https://github.com/alan-turing-institute), Ed Chalstrey, James Robinson, Martin O'Reilly, Gertjan van den Burg, Nelson Liu, and many other valuable contributors. ReadabiliGo aims for compatibility with ReadabiliPy's output format while providing a pure Go implementation with some enhancements.
 
 ## Features
 
@@ -101,11 +101,9 @@ Options:
   -detect-content-type
         Enable content type detection (default true)
   -content-type string
-        Force content type: reference, article, technical, error, minimal (bypasses detection)
+        Force content type: reference, article, technical, error, minimal, paywall (bypasses detection)
   -preserve-links
         Preserve important links in cleanup
-  -js
-        DEPRECATED: No effect - JavaScript implementation has been removed
   -version
         Show version information
   -help
@@ -213,7 +211,6 @@ func extractReferenceContent() {
 }
 ```
 
-> **Note**: For backward compatibility, the library can still be imported from `github.com/mrjoshuak/readabiligo/extractor` as in previous versions.
 
 ## Output Format
 
@@ -235,18 +232,20 @@ Additional notes:
 
 ## Differences from ReadabiliPy
 
-ReadabiliGo is designed to be compatible with ReadabiliPy, with the following differences:
+ReadabiliGo aims to be compatible with ReadabiliPy's output format, with these key differences:
 
-- Implemented in Go instead of Python
-- Uses a pure Go implementation of Readability.js with no JavaScript dependencies
+- Implemented in Go instead of Python for better performance and portability
+- Uses a pure Go implementation with no external dependencies
 - Enhanced structure preservation, particularly beneficial for reference content
+- Title extraction prioritizes h1 elements with itemprop="headline" matching Python's behavior
 - Comprehensive content extraction that maintains document hierarchy and organization
 - Improved link preservation for sources and references 
 - Better preservation of headings and lists for more navigable extracted content
-- Potentially better performance due to Go's efficiency compared to Python
-- Concurrent extraction with timeout support
+- Superior performance due to Go's efficiency compared to Python
+- Concurrent extraction with configurable timeout support
 - Enhanced command-line interface with batch processing capabilities
 - Multiple output format options (JSON, HTML, text)
+- Content type awareness for specialized extraction (Reference, Article, Technical, Error, Minimal, Paywall)
 
 ### Content Extraction Philosophy
 

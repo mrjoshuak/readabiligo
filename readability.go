@@ -39,19 +39,6 @@ type Extractor interface {
 // This follows the functional options pattern for configuring the extractor.
 type Option func(*ExtractionOptions)
 
-// WithReadability formerly enabled or disabled Readability.js usage.
-// DEPRECATED: This option is now a no-op. The JavaScript bridge has been removed.
-// The pure Go implementation is now the only available approach.
-//
-// This option is kept for backward compatibility but has no effect.
-// All extraction is performed using the pure Go implementation.
-func WithReadability(use bool) Option {
-	return func(o *ExtractionOptions) {
-		// No-op - JavaScript support has been removed
-		// The UseReadability field is still set for backward compatibility
-		o.UseReadability = use
-	}
-}
 
 // WithContentDigests enables or disables content digest attributes.
 // Content digests are SHA256 hashes of the content, which can be used to
@@ -141,11 +128,6 @@ func (e *articleExtractor) ExtractFromHTML(html string, options *ExtractionOptio
 		var article *Article
 		var err error
 
-		// If using Readability.js option is set (deprecated), provide a warning but continue with pure Go
-		if options.UseReadability {
-			// Log warning in debug mode here if needed
-			// Silently fall back to pure Go implementation
-		}
 		
 		// Use pure Go implementation
 		article, err = e.extractUsingPureGo(html, options)
@@ -187,7 +169,6 @@ func (e *articleExtractor) ExtractFromReader(r io.Reader, options *ExtractionOpt
 func (e *articleExtractor) extractUsingPureGo(html string, options *ExtractionOptions) (*Article, error) {
 	// Convert our options to internal options
 	internalOptions := &readability.ExtractionOptions{
-		UseReadability:        options.UseReadability,
 		ContentDigests:        options.ContentDigests,
 		NodeIndexes:           options.NodeIndexes,
 		MaxBufferSize:         options.MaxBufferSize,

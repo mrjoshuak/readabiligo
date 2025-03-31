@@ -69,7 +69,6 @@ func (ct ContentType) String() string {
 // It controls whether to include content digests and node indexes,
 // and sets limits on buffer size and extraction timeout.
 type ExtractionOptions struct {
-	UseReadability       bool          // DEPRECATED: No effect - kept for backward compatibility
 	ContentDigests       bool          // Add content digest attributes
 	NodeIndexes          bool          // Add node index attributes
 	MaxBufferSize        int           // Maximum buffer size for content processing
@@ -86,7 +85,6 @@ type ExtractionOptions struct {
 // Content type detection is enabled by default.
 func DefaultOptions() ExtractionOptions {
 	return ExtractionOptions{
-		UseReadability:       false, // Now uses pure Go implementation by default
 		ContentDigests:       false,
 		NodeIndexes:          false,
 		MaxBufferSize:        1024 * 1024, // 1MB
