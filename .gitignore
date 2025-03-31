@@ -41,6 +41,7 @@ node_modules/
 
 # Real-world test data and test files from ReadabiliPy (may contain copyrighted content)
 test/data/real_world/
+test/data/reference/
 test/data/addictinginfo.com-1_full_page.html
 test/data/addictinginfo.com-1_simple_article_from_full_page.json
 test/data/conservativehq.com-1_full_page.html

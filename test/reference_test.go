@@ -21,7 +21,15 @@ func TestComparisonWithPythonReference(t *testing.T) {
 		t.Skip("Skipping reference test in short mode")
 	}
 
-	// Create map of test files
+	// Create map of test files - these match the test pairs from the Python project's test_article_extraction.py
+	testPairs := map[string]string{
+		"addictinginfo.html":   "addictinginfo.json",
+		"conservativehq.html":  "conservativehq.json",
+		"davidwolfe.html":      "davidwolfe.json",
+		"list_items.html":      "list_items.json",
+		"non_article.html":     "non_article.json",
+	}
+
 	refDir := filepath.Join("data", "reference")
 	htmlDir := filepath.Join(refDir, "html")
 	expectedDir := filepath.Join(refDir, "expected")
@@ -34,33 +42,29 @@ func TestComparisonWithPythonReference(t *testing.T) {
 		t.Skipf("Reference expected directory %s does not exist. Run download_test_data.sh first.", expectedDir)
 	}
 
-	// Get all HTML files
-	files, err := os.ReadDir(htmlDir)
-	require.NoError(t, err)
+	// Run tests for each test pair
+	for htmlFile, jsonFile := range testPairs {
+		htmlPath := filepath.Join(htmlDir, htmlFile)
+		jsonPath := filepath.Join(expectedDir, jsonFile)
 
-	for _, file := range files {
-		// Skip non-HTML files and the benchmark file
-		if !strings.HasSuffix(file.Name(), ".html") || file.Name() == "benchmarkinghuge.html" {
+		// Skip if either file doesn't exist
+		if _, err := os.Stat(htmlPath); os.IsNotExist(err) {
+			t.Logf("Skipping test for %s: HTML file not found", htmlFile)
+			continue
+		}
+		if _, err := os.Stat(jsonPath); os.IsNotExist(err) {
+			t.Logf("Skipping test for %s: JSON file not found", htmlFile)
 			continue
 		}
 
-		baseName := strings.TrimSuffix(file.Name(), ".html")
-		jsonFile := filepath.Join(expectedDir, baseName+".json")
-
+		baseName := strings.TrimSuffix(htmlFile, ".html")
 		t.Run(baseName, func(t *testing.T) {
-			// Check if the expected JSON file exists
-			if _, err := os.Stat(jsonFile); os.IsNotExist(err) {
-				t.Skipf("Expected JSON file %s does not exist", jsonFile)
-				return
-			}
-
 			// Read the HTML file content
-			htmlPath := filepath.Join(htmlDir, file.Name())
 			htmlContent, err := os.ReadFile(htmlPath)
 			require.NoError(t, err)
 
 			// Read the expected JSON file
-			jsonContent, err := os.ReadFile(jsonFile)
+			jsonContent, err := os.ReadFile(jsonPath)
 			require.NoError(t, err)
 
 			var expectedOutput map[string]interface{}

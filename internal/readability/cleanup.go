@@ -326,8 +326,36 @@ func (r *Readability) shouldSkipConditionalCleaning(node *goquery.Selection, tag
 	return false
 }
 
+// shouldPreserveStructure determines if a node should be preserved for structural reasons
+func (r *Readability) shouldPreserveStructure(node *goquery.Selection, tag string) bool {
+	// Always preserve certain heading levels
+	if node.Is("h1, h2, h3") {
+		return true
+	}
+	
+	// Preserve lists with content
+	if (tag == "ul" || tag == "ol") && node.Find("li").Length() > 0 {
+		// If list has more than 2 items or substantial text, preserve it
+		if node.Find("li").Length() >= 3 || len(getInnerText(node, true)) > MinParagraphLength {
+			return true
+		}
+	}
+	
+	// Preserve content-rich elements
+	if len(getInnerText(node, true)) > MinParagraphLength*2 {
+		return true
+	}
+	
+	return false
+}
+
 // shouldRemoveNode evaluates if a node should be removed during conditional cleaning
 func (r *Readability) shouldRemoveNode(node *goquery.Selection, tag string) bool {
+	// Check for structure preservation first
+	if r.shouldPreserveStructure(node, tag) {
+		return false // Keep important structural elements
+	}
+	
 	// Calculate weight
 	weight := getClassWeight(node)
 	
@@ -378,7 +406,7 @@ func (r *Readability) calculateNodeMetrics(node *goquery.Selection) NodeMetrics 
 	// Count various element types
 	metrics.paragraphCount = node.Find("p").Length()
 	metrics.imgCount = node.Find("img").Length()
-	metrics.liCount = node.Find("li").Length() - 100 // Discount list items
+	metrics.liCount = node.Find("li").Length() // Don't artificially discount list items
 	metrics.inputCount = node.Find("input").Length()
 	
 	// Count headings and their text ratio
@@ -432,8 +460,18 @@ func (r *Readability) hasNonLinkListContent(node *goquery.Selection) bool {
 	})
 	
 	// If list items are mostly links, it's probably not content
-	if totalText > 0 && float64(totalLinks)/float64(totalText) < ListLinkDensityThreshold {
-		return true
+	if totalText > 0 {
+		linkDensity := float64(totalLinks)/float64(totalText)
+		
+		// Accept lists with reasonable link density
+		if linkDensity < ListLinkDensityThreshold {
+			return true
+		}
+		
+		// Also accept lists with substantial content even if link-heavy
+		if totalText > MinParagraphLength {
+			return true
+		}
 	}
 	
 	return false
@@ -449,9 +487,12 @@ func (r *Readability) evaluateRemovalCriteria(node *goquery.Selection, tag strin
 		return true
 	}
 	
-	// Non-list with too many list items
-	if !isList && metrics.liCount > metrics.paragraphCount {
-		return true
+	// Non-list with too many list items - but be more forgiving
+	if !isList && metrics.liCount > metrics.paragraphCount*2 {
+		// Only remove if this isn't part of a larger content structure
+		if metrics.contentLength < MinContentTextLength*2 {
+			return true
+		}
 	}
 	
 	// Too many input fields
@@ -467,7 +508,7 @@ func (r *Readability) evaluateRemovalCriteria(node *goquery.Selection, tag strin
 		return true
 	}
 	
-	// Low weight with high link density
+	// Low weight with high link density - but exempt lists from this check
 	if !isList && weight < ConditionalWeightThresholdLow && 
 	   metrics.linkDensity > ConditionalLinkDensityThresholdLow {
 		return true
@@ -475,7 +516,9 @@ func (r *Readability) evaluateRemovalCriteria(node *goquery.Selection, tag strin
 	
 	// High weight with very high link density
 	if weight >= ConditionalWeightThresholdLow && 
-	   metrics.linkDensity > ConditionalLinkDensityThresholdHigh {
+	   metrics.linkDensity > ConditionalLinkDensityThresholdHigh &&
+	   // Be more forgiving with lists, especially those with many items
+	   !(isList && metrics.liCount > 4) {
 		return true
 	}
 	
@@ -545,7 +588,26 @@ func (r *Readability) processTitleHeaders(titleMatches []*goquery.Selection, see
 
 // processDuplicateHeaders processes remaining headers looking for duplicates
 func (r *Readability) processDuplicateHeaders(e *goquery.Selection, seenHeadings map[string]bool) {
-	e.Find("h1, h2").Each(func(i int, header *goquery.Selection) {
+	e.Find("h1, h2, h3").Each(func(i int, header *goquery.Selection) {
+		// Add special handling to preserve important headings
+		if len(getInnerText(header, true)) > 0 {
+			// Keep important headings unless they have negative class weight
+			if getClassWeight(header) >= 0 {
+				// Still track seen headings to avoid duplicates
+				headerText := getInnerText(header, false)
+				headingTrimmed := strings.TrimSpace(headerText)
+				
+				// If we've seen this header text before, remove it
+				if seenHeadings[headingTrimmed] {
+					header.Remove()
+				} else {
+					seenHeadings[headingTrimmed] = true
+					return // Skip removing this heading
+				}
+			}
+		}
+		
+		// Original logic for other headings
 		// Skip headers with low class weight
 		if getClassWeight(header) < 0 {
 			header.Remove()
