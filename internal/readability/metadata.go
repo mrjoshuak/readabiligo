@@ -52,20 +52,27 @@ func (r *Readability) getArticleMetadata(jsonLd map[string]string) map[string]st
 		}
 	})
 
-	// Extract article title
-	metadata["title"] = r.getArticleTitle()
-
-	// Override with JSON-LD title if available
-	if jsonLd["title"] != "" {
-		metadata["title"] = jsonLd["title"]
-	} else if values["dc:title"] != "" {
-		metadata["title"] = values["dc:title"]
-	} else if values["dcterm:title"] != "" {
-		metadata["title"] = values["dcterm:title"]
-	} else if values["og:title"] != "" {
-		metadata["title"] = values["og:title"]
-	} else if values["twitter:title"] != "" {
-		metadata["title"] = values["twitter:title"]
+	// Extract article title using our main title extraction algorithm
+	// This approach has been carefully tuned to match Python ReadabiliPy's behavior
+	articleTitle := r.getArticleTitle()
+	metadata["title"] = articleTitle
+	
+	// For compatibility with Python, we only use metadata titles as fallbacks
+	// This approach was changed to fix the davidwolfe test case where the article h1 title
+	// should be prioritized over the meta title
+	if articleTitle == "" {
+		// Only use these fallbacks if we don't have a good article title from the main algorithm
+		if jsonLd["title"] != "" {
+			metadata["title"] = jsonLd["title"]
+		} else if values["dc:title"] != "" {
+			metadata["title"] = values["dc:title"]
+		} else if values["dcterm:title"] != "" {
+			metadata["title"] = values["dcterm:title"]
+		} else if values["og:title"] != "" {
+			metadata["title"] = values["og:title"]
+		} else if values["twitter:title"] != "" {
+			metadata["title"] = values["twitter:title"]
+		}
 	}
 
 	// Extract article byline
@@ -114,9 +121,34 @@ func (r *Readability) getArticleMetadata(jsonLd map[string]string) map[string]st
 	return metadata
 }
 
-// getArticleTitle extracts the title from the document
+// getArticleTitle extracts the title from the document using a hierarchical approach:
+// 1. First tries to find a high-quality h1 with itemprop="headline" in the article body
+// 2. If not found, falls back to the document's title tag
+// 3. Handles separators in titles (like " | ", " - ", etc.)
+// 4. Tries to find h1 elements if title tag is inadequate
+// 5. Uses various quality heuristics to determine the best title
+//
+// This implementation is designed to match Python ReadabiliPy's behavior,
+// which prioritizes h1 elements with itemprop="headline" over meta titles.
+// This was crucial for cases like the davidwolfe test where the article had
+// two different titles - one in meta tags and another in the article body.
 func (r *Readability) getArticleTitle() string {
-	// Get title from the document
+	// First, try to get the title from h1 with itemprop="headline" - Python version prioritizes this
+	h1Title := ""
+	r.doc.Find("h1[itemprop='headline']").Each(func(i int, s *goquery.Selection) {
+		if i == 0 { // Only take the first one
+			h1Title = strings.TrimSpace(s.Text())
+		}
+	})
+	
+	// If we found a clear headline in the article body, return it
+	// We only use it if it's a reasonable length (not too short, not too long)
+	if h1Title != "" && len(h1Title) > 15 && len(h1Title) < 150 {
+		return h1Title
+	}
+
+	// Otherwise, proceed with standard title extraction
+	// Get title from the document head
 	docTitle := strings.TrimSpace(r.doc.Find("title").Text())
 	origTitle := docTitle
 
@@ -173,6 +205,19 @@ func (r *Readability) getArticleTitle() string {
 		h1s := r.doc.Find("h1")
 		if h1s.Length() == 1 {
 			docTitle = strings.TrimSpace(h1s.Text())
+		} else if h1s.Length() > 1 {
+			// If multiple h1 elements, prioritize ones with itemprop="headline"
+			h1Title := ""
+			h1s.Each(func(i int, s *goquery.Selection) {
+				if itemprop, exists := s.Attr("itemprop"); exists && itemprop == "headline" {
+					h1Title = strings.TrimSpace(s.Text())
+					return // Break the loop
+				}
+			})
+			
+			if h1Title != "" {
+				docTitle = h1Title
+			}
 		}
 	}
 
