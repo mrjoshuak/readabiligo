@@ -7,9 +7,9 @@ This package is a Go port of [ReadabiliPy](https://github.com/alan-turing-instit
 ## Features
 
 - Extract article content, title, byline, and date from HTML
-- Content-type awareness with specialized extraction for different content types
-- Superior structure preservation for reference content and documentation
-- Better heading hierarchy and list element retention
+- Faithful implementation of Mozilla's Readability.js algorithm
+- Consistent content extraction for all types of documents
+- Good structure preservation and heading hierarchy
 - Improved link preservation for sources and citations
 - Output in JSON, HTML, or plain text formats
 - Support for content digests and node indexes for tracking HTML structure
@@ -99,9 +99,9 @@ Options:
   -timeout duration
         Timeout for extraction (default 30s)
   -detect-content-type
-        Enable content type detection (default true)
+        Deprecated: No longer has any effect, maintained for backward compatibility
   -content-type string
-        Force content type: reference, article, technical, error, minimal, paywall (bypasses detection)
+        Deprecated: No longer has any effect, maintained for backward compatibility
   -preserve-links
         Preserve important links in cleanup
   -version
@@ -173,7 +173,6 @@ func main() {
 		readabiligo.WithContentDigests(true),    // Add content digest attributes
 		readabiligo.WithNodeIndexes(true),       // Add node index attributes
 		readabiligo.WithTimeout(time.Second*60), // Set a 60-second timeout
-		readabiligo.WithDetectContentType(true), // Enable content type detection
 		readabiligo.WithPreserveImportantLinks(true), // Preserve "Read more" links
 	)
 
@@ -197,18 +196,6 @@ func main() {
 		}
 	}
 }
-
-// For specific content types, specify them directly
-func extractReferenceContent() {
-	ext := readabiligo.New(
-		// Specify content type directly (bypasses auto-detection)
-		readabiligo.WithContentType(readabiligo.ContentTypeReference),
-		// Disable auto-detection when using explicit type
-		readabiligo.WithDetectContentType(false),
-	)
-	
-	// Now the extractor will use reference-optimized extraction rules
-}
 ```
 
 
@@ -222,7 +209,7 @@ The extractor returns an `Article` struct with the following fields:
 - `Content`: A simplified HTML representation of the article
 - `PlainContent`: A "plain" version of the simplified HTML, preserving structure
 - `PlainText`: A slice of text blocks, each representing a paragraph or list
-- `ContentType`: The detected content type (Reference, Article, Technical, Error, Minimal)
+- `ContentType`: The content type field (maintained for backward compatibility, always set to "Article")
 
 Additional notes:
 
@@ -245,41 +232,30 @@ ReadabiliGo aims to be compatible with ReadabiliPy's output format, with these k
 - Concurrent extraction with configurable timeout support
 - Enhanced command-line interface with batch processing capabilities
 - Multiple output format options (JSON, HTML, text)
-- Content type awareness for specialized extraction (Reference, Article, Technical, Error, Minimal, Paywall)
 
 ### Content Extraction Philosophy
 
-ReadabiliGo takes a different approach to content extraction compared to ReadabiliPy and other Readability implementations:
+ReadabiliGo aims to provide a faithful implementation of Mozilla's Readability.js algorithm in pure Go. Key aspects of the implementation:
 
-- **Content-Type Awareness**: ReadabiliGo automatically detects the type of content (Reference, Article, Technical, Error, Minimal) and applies specialized extraction rules for optimal results with each type.
+- **Mozilla Compatible**: ReadabiliGo follows the same core algorithm as Mozilla's Readability.js, ensuring consistent results across implementations.
 
-- **Structure Preservation**: ReadabiliGo preserves more of the document's original structure, including heading hierarchy, lists, and reference links. This is particularly valuable for reference content like Wikipedia articles, technical documentation, and educational materials.
+- **Structure Preservation**: The algorithm preserves appropriate document structure, including heading hierarchy, lists, and reference links, while removing non-content elements.
 
-- **Content-Rich Extraction**: While other implementations focus on aggressive cleaning and simplification, ReadabiliGo maintains more of the content's context and related elements. This approach provides a richer reading experience, especially for complex, structured content.
+- **Balanced Extraction**: Following Mozilla's approach, ReadabiliGo balances between aggressive cleaning and preserving important context and related elements.
 
-- **Reference Link Preservation**: ReadabiliGo is more likely to preserve functional links to sources, citations, and related content, making the extracted content more useful for research and fact-checking.
+- **Reference Link Preservation**: The implementation preserves functional links to sources, citations, and related content where appropriate.
 
-- **Intelligent Cleaning**: For error pages and minimal content, ReadabiliGo applies more aggressive cleaning to focus on the essential content and remove navigation and other non-content elements.
+- **Unified Approach**: ReadabiliGo uses a single, unified algorithm for all content types, following Mozilla's implementation philosophy.
 
-This approach makes ReadabiliGo particularly well-suited for:
+ReadabiliGo works well with various content types:
 
+- News articles and blog posts
 - Reference material and documentation
 - Technical content with code examples
-- Educational content with structured information
-- Research articles with citations and references
-- Any content where structure and organization are important to understanding
+- Educational content
+- Research articles with citations
 
-For simpler content like news articles, both approaches produce similar results, but ReadabiliGo may provide additional context and structure that enhances the reading experience.
-
-#### Content Types
-
-ReadabiliGo detects and optimizes extraction for five content types:
-
-1. **Reference** (Wikipedia, documentation): Preserves more structure, headings, lists, and citations
-2. **Article** (News, blog posts): Standard extraction with balanced cleaning
-3. **Technical** (Code examples, tutorials): Preserves code blocks and technical details
-4. **Error** (404, error pages): Aggressive cleaning to focus on error messages
-5. **Minimal** (Login pages, simple forms): Focuses on core content only
+The algorithm analyzes the content structure and applies appropriate extraction rules based on the content characteristics, without relying on predefined content type categories.
 
 ## License
 

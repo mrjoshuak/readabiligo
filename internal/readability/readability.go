@@ -130,19 +130,17 @@ func (r *Readability) Parse() (*ReadabilityArticle, error) {
 		}
 	}
 
-	// Detect content type if enabled
-	if r.options.DetectContentType && r.contentType == ContentTypeUnknown {
-		r.contentType = DetectContentType(r.doc)
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Detected content type: %s\n", r.contentType.String())
-		}
-	} else if !r.options.DetectContentType && r.contentType == ContentTypeUnknown {
-		// Default to Article if detection is disabled and no type specified
+	// For compatibility, still set a content type but use standard algorithm
+	if r.contentType == ContentTypeUnknown {
+		// Default to Article type for all content
 		r.contentType = ContentTypeArticle
+		if r.options.Debug {
+			fmt.Printf("DEBUG: Using standard Mozilla algorithm for all content types\n")
+		}
 	}
-
-	// Adjust extraction parameters based on content type
-	r.adjustForContentType()
+	
+	// Set standard flags for all content types (consistent with Mozilla's implementation)
+	r.flags = FlagStripUnlikelys | FlagWeightClasses | FlagCleanConditionally
 
 	// Unwrap noscript images
 	r.unwrapNoscriptImages()
@@ -185,7 +183,8 @@ func (r *Readability) Parse() (*ReadabilityArticle, error) {
 		})
 	}
 
-	// Apply content-type specific cleanup
+	// Apply standard content cleanup (ignoring content type)
+	// Keep the function call for compatibility, but it now uses a standard approach
 	r.applyContentTypeCleanup(article)
 
 	// Additional cleanup step: make sure footers are removed

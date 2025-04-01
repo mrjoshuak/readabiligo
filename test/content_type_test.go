@@ -12,7 +12,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// TestContentTypeOptimizedExtraction tests content type-specific extraction on real-world examples
+// TestContentTypeOptimizedExtraction tests extraction on real-world examples
+// Note: Content type settings no longer have any effect on extraction behavior
+// as the implementation now follows Mozilla's unified algorithm for all content.
+// This test is kept for backward compatibility and to ensure the API still works.
 func TestContentTypeOptimizedExtraction(t *testing.T) {
 	// Skip if running in short mode
 	if testing.Short() {
@@ -216,7 +219,10 @@ func TestContentTypeOptimizedExtraction(t *testing.T) {
 	}
 }
 
-// TestPaywallContentExtraction is a specialized test for paywall content extraction
+// TestPaywallContentExtraction tests extraction of paywall content
+// Note: Content type settings no longer affect extraction behavior
+// as the implementation now follows Mozilla's unified algorithm for all content.
+// This test is kept for backward compatibility and to ensure the API still works.
 func TestPaywallContentExtraction(t *testing.T) {
 	// Get the paywall test file
 	filePath := filepath.Join("data", "edge_cases", "paywall_content_test.html")

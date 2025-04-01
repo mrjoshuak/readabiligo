@@ -31,10 +31,15 @@ type Article struct {
 	ContentType  ContentType `json:"content_type"`
 }
 
-// ContentType represents the type of content in a document
+// ContentType represents the type of content in a document.
+// This type is maintained for backward compatibility but no longer affects extraction.
+// The extraction now uses Mozilla's original unified algorithm for all content types.
+// Deprecated: This type no longer affects extraction behavior.
 type ContentType int
 
-// Content type constants
+// Content type constants - maintained for backward compatibility
+// These constants no longer affect the extraction behavior.
+// Deprecated: These constants no longer affect extraction behavior.
 const (
 	ContentTypeUnknown ContentType = iota
 	ContentTypeReference  // Wikipedia, documentation
@@ -74,15 +79,16 @@ type ExtractionOptions struct {
 	MaxBufferSize        int           // Maximum buffer size for content processing
 	Timeout              time.Duration // Timeout for extraction process
 	PreserveImportantLinks bool        // Preserve important links in cleaned elements (like "More information...")
-	DetectContentType    bool          // Whether to enable content type detection
-	ContentType          ContentType   // Content type to use for extraction (or auto-detected if DetectContentType is true)
+	DetectContentType    bool          // Deprecated: No longer has any effect, maintained for backward compatibility
+	ContentType          ContentType   // Deprecated: No longer has any effect, maintained for backward compatibility
 }
 
 // DefaultOptions returns the default extraction options.
 // By default, the pure Go implementation is used, content digests and node indexes
 // are disabled, buffer size is limited to 1MB, and timeout is set to 30 seconds.
 // Important link preservation is disabled by default to match ReadabiliPy behavior.
-// Content type detection is enabled by default.
+// Note: Content type detection and content type settings no longer have any effect,
+// as the implementation now uses Mozilla's unified algorithm for all content.
 func DefaultOptions() ExtractionOptions {
 	return ExtractionOptions{
 		ContentDigests:       false,
@@ -90,8 +96,8 @@ func DefaultOptions() ExtractionOptions {
 		MaxBufferSize:        1024 * 1024, // 1MB
 		Timeout:              time.Second * 30,
 		PreserveImportantLinks: false, // Default to false to match ReadabiliPy behavior
-		DetectContentType:    true,    // Enable content type detection by default
-		ContentType:          ContentTypeUnknown, // Auto-detect by default
+		DetectContentType:    false,   // No-op but set to false for clarity
+		ContentType:          ContentTypeArticle, // No-op but set to Article for clarity
 	}
 }
 

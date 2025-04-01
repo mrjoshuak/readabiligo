@@ -68,21 +68,24 @@ func WithPreserveImportantLinks(enable bool) Option {
 	}
 }
 
-// WithDetectContentType enables or disables automatic content type detection.
-// When enabled, the extractor will analyze the document structure to determine
-// the appropriate content type (Reference, Article, Technical, Error, Minimal)
-// and apply optimized extraction rules for that content type.
+// WithDetectContentType is maintained for backward compatibility but does nothing.
+// The content type detection has been removed to follow Mozilla's Readability.js algorithm,
+// which uses a unified approach for all content types.
+// Deprecated: This option no longer has any effect.
 func WithDetectContentType(enable bool) Option {
 	return func(o *ExtractionOptions) {
+		// No-op for backward compatibility
 		o.DetectContentType = enable
 	}
 }
 
-// WithContentType sets a specific content type for extraction, bypassing automatic detection.
-// This is useful when you know in advance what type of content you're extracting.
-// Has no effect if WithDetectContentType is enabled.
+// WithContentType is maintained for backward compatibility but does nothing.
+// The content type specialization has been removed to follow Mozilla's Readability.js algorithm,
+// which uses a unified approach for all content types.
+// Deprecated: This option no longer has any effect.
 func WithContentType(contentType ContentType) Option {
 	return func(o *ExtractionOptions) {
+		// No-op for backward compatibility
 		o.ContentType = contentType
 	}
 }

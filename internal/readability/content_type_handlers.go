@@ -9,301 +9,63 @@ import (
 	"github.com/PuerkitoBio/goquery"
 )
 
-// adjustForContentType modifies the extraction parameters based on the content type
+// adjustForContentType is kept for API compatibility but now uses standard Mozilla algorithm
+// for all content types to match the original implementation
 func (r *Readability) adjustForContentType() {
-	switch r.contentType {
-	case ContentTypeReference:
-		// For reference content like Wikipedia, preserve more structure
-		r.flags = r.flags & ^FlagCleanConditionally // Disable conditional cleaning
-		r.flags = r.flags & ^FlagStripUnlikelys     // Disable stripping of unlikely candidates
-		r.options.PreserveImportantLinks = true     // Preserve important links
-		r.options.CharThreshold = r.options.CharThreshold / 2 // Lower threshold to keep more content
-		
-		// Modify score weights to favor structured content
-		// We'll implement customizations in applyContentTypeCleanup
-		
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using reference content extraction settings (maximum structure preservation)\n")
-		}
-
-	case ContentTypeTechnical:
-		// For technical content, preserve code blocks and structure
-		r.options.PreserveImportantLinks = true
-		r.flags = r.flags | FlagCleanConditionally  // Enable conditional cleaning
-		r.flags = r.flags & ^FlagStripUnlikelys     // Disable stripping for code blocks
-		
-		// Add code-related classes to preserve
-		r.options.ClassesToPreserve = append(
-			r.options.ClassesToPreserve, 
-			"code", "highlight", "syntax", "pre", "codeblock", "language-*",
-		)
-		
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using technical content extraction settings (code block preservation)\n")
-		}
-
-	case ContentTypeError:
-		// For error pages, be more aggressive in cleaning
-		r.flags = r.flags | FlagStripUnlikelys | FlagWeightClasses | FlagCleanConditionally
-		r.options.PreserveImportantLinks = false
-		r.options.CharThreshold = r.options.CharThreshold * 2 // Higher threshold to exclude more content
-		
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using error page extraction settings (aggressive cleaning)\n")
-		}
-
-	case ContentTypeMinimal:
-		// For minimal content pages, focus on core content only
-		r.flags = r.flags | FlagStripUnlikelys | FlagWeightClasses | FlagCleanConditionally
-		r.options.PreserveImportantLinks = false
-		r.options.CharThreshold = r.options.CharThreshold * 3/2 // Higher threshold to exclude more content
-		
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using minimal content extraction settings (focus on core content)\n")
-		}
-		
-	case ContentTypePaywall:
-		// For paywall content, extract all available content and ignore the paywall
-		r.flags = r.flags & ^FlagCleanConditionally // Disable conditional cleaning for max content
-		r.flags = r.flags | FlagStripUnlikelys | FlagWeightClasses // Still strip unlikely elements
-		r.options.PreserveImportantLinks = true // Keep important links that might bypass the paywall
-		r.options.CharThreshold = r.options.CharThreshold / 4 // Very low threshold to extract everything
-		
-		// Preserve premium content markers
-		r.options.ClassesToPreserve = append(
-			r.options.ClassesToPreserve,
-			"premium-content", "paid-content", "subscriber-content",
-		)
-		
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using paywall content extraction settings (maximum content extraction)\n")
-		}
-
-	case ContentTypeArticle:
-		// Standard article extraction (default) - balanced approach
-		r.flags = FlagStripUnlikelys | FlagWeightClasses | FlagCleanConditionally
-		r.options.PreserveImportantLinks = false // Standard article usually doesn't need footer links
-		
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using standard article extraction settings (balanced cleaning)\n")
-		}
-
-	default:
-		// Unknown content type - use standard settings
-		r.flags = FlagStripUnlikelys | FlagWeightClasses | FlagCleanConditionally
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Using default extraction settings for unknown content type\n")
-		}
+	// Use the same settings for all content types (Mozilla's standard behavior)
+	r.flags = FlagStripUnlikelys | FlagWeightClasses | FlagCleanConditionally
+	
+	// Preserve code blocks regardless of content type (they're often important)
+	r.options.ClassesToPreserve = append(
+		r.options.ClassesToPreserve, 
+		"code", "highlight", "syntax", "pre", "codeblock", "language-*",
+	)
+	
+	// Note: We're deliberately not adjusting the threshold or other parameters based on 
+	// content type, to match Mozilla's original algorithm
+	
+	if r.options.Debug {
+		fmt.Printf("DEBUG: Using standard Mozilla algorithm settings (ignoring content type)\n")
 	}
 }
 
-// applyContentTypeCleanup performs additional content-type specific cleanup
+// applyContentTypeCleanup performs standard content cleanup using Mozilla's algorithm
+// The content-type specific handling has been removed to match the original implementation
 func (r *Readability) applyContentTypeCleanup(article *goquery.Selection) {
-	switch r.contentType {
-	case ContentTypeReference:
-		// For reference content like Wikipedia, preserve more structure
-		// Keep tables, infoboxes, and citations by default
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Applying reference content cleanup rules (maximum structure preservation)\n")
-		}
-		
-		// Specific cleanup for Wikipedia-like content:
-		// Remove only edit links but keep all other structure
-		article.Find("span.mw-editsection, a.mw-editsection").Remove()
-		
-		// Add class to preserve all headings
-		article.Find("h1, h2, h3, h4, h5, h6").AddClass("readability-preserve")
-		
-		// Add class to preserve all lists
-		article.Find("ul, ol").AddClass("readability-preserve")
-		
-		// Add class to preserve tables that look like they contain data
-		article.Find("table").Each(func(_ int, s *goquery.Selection) {
-			// Keep tables with structure that looks like data/infoboxes
-			if s.Find("th, td").Length() > 4 || s.HasClass("infobox") || s.HasClass("wikitable") {
-				s.AddClass("readability-preserve")
-			}
-		})
-		
-		// Make sure footnotes and citations are preserved
-		article.Find(".references, .citation, .footnote, .reference, .cite").AddClass("readability-preserve")
-		
-		// Keep figures and captions
-		article.Find("figure, figcaption").AddClass("readability-preserve")
-
-	case ContentTypeTechnical:
-		// For technical content, ensure code blocks are preserved
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Applying technical content cleanup rules (code preservation)\n")
-		}
-		
-		// Preserve code blocks and technical content
-		preserveCodeElements(article)
-		
-		// Also preserve headings, which are important in technical content
-		article.Find("h1, h2, h3, h4, h5, h6").AddClass("readability-preserve")
-		
-		// Add class to preserve syntax highlighting elements
-		article.Find(".syntax, .language-*, [class*='language-']").AddClass("readability-preserve")
-		
-		// Preserve console output and command examples
-		article.Find(".console, .terminal, .shell, .command").AddClass("readability-preserve")
-		
-		// Make sure tables that contain code or examples are preserved
-		article.Find("table").Each(func(_ int, s *goquery.Selection) {
-			if s.Find("code, pre, .syntax").Length() > 0 {
-				s.AddClass("readability-preserve")
-			}
-		})
-
-	case ContentTypeError:
-		// For error pages, be more selective in cleaning
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Applying error page cleanup rules (focus on important elements)\n")
-		}
-		
-		// Apply less aggressive cleaning to error pages
-		cleanupErrorPage(article)
-		
-		// Ensure core error message elements are preserved
-		article.Find("h1, h2, p, .error, .not-found, .error-container").AddClass("readability-preserve")
-		
-		// Specifically preserve the link to homepage
-		article.Find("a[href='/']").AddClass("readability-preserve")
-		
-		// Handle error content more selectively - don't remove content that looks like error messages
-		article.Children().Each(func(_ int, s *goquery.Selection) {
-			// Check if it contains error-related content
-			text := strings.ToLower(s.Text())
-			if strings.Contains(text, "error") || 
-			   strings.Contains(text, "not found") ||
-			   strings.Contains(text, "404") ||
-			   strings.Contains(text, "sorry") {
-				// This is likely part of the error message - preserve it
-				s.AddClass("readability-preserve")
-			} else if s.Is("h1, h2, .error, .error-container, .not-found") {
-				// Also preserve these key elements
-				s.AddClass("readability-preserve")
-			}
-		})
-		
-		// More carefully handle links on error pages
-		article.Find("a").Each(func(_ int, s *goquery.Selection) {
-			text := strings.ToLower(s.Text())
-			href, _ := s.Attr("href")
-			// Keep important links
-			if strings.Contains(text, "home") || 
-			   strings.Contains(text, "contact") || 
-			   strings.Contains(text, "help") ||
-			   href == "/" {
-				s.AddClass("readability-preserve")
-			}
-		})
-
-	case ContentTypeMinimal:
-		// For minimal content pages, focus on core content only
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Applying minimal content cleanup rules (core content focus)\n")
-		}
-		
-		// Apply strict cleaning to minimal pages
-		cleanupMinimalPage(article)
-		
-	case ContentTypePaywall:
-		// For paywall content, apply special handling to extract everything
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Applying paywall content cleanup rules (premium content extraction)\n")
-		}
-		
-		// Special handling for paywall content to match test expectations exactly
-		
-		// First, handle fade-out class which is expected in our tests
-		hasFadeOut := false
-		article.Find(".fade-out").Each(func(_ int, s *goquery.Selection) {
-			hasFadeOut = true
-			// Keep original class but remove hiding style
-			s.RemoveAttr("style")
-			s.AddClass("readability-preserve")
-		})
-		
-		// Next handle paid content sections
-		article.Find(".paid-content").Each(func(_ int, s *goquery.Selection) {
-			// Make hidden content visible
-			s.RemoveAttr("style")
-			s.AddClass("readability-preserve")
-		})
-		
-		// Handle premium content sections
-		article.Find(".premium-content").Each(func(_ int, s *goquery.Selection) {
-			s.AddClass("readability-preserve")
-		})
-		
-		// Handle the subscription prompt specially
-		article.Find(".subscription-prompt").Remove()
-		
-		// Remove specific paywall-related elements as needed by the tests
-		article.Find(".paywall").Remove()
-		
-		// Remove subscribe buttons
-		article.Find(".subscribe-button").Remove()
-		
-		// Handle subscribe links specially
-		article.Find("a[href='/subscribe']").Each(func(_ int, s *goquery.Selection) {
-			// For test matching, remove these specifically
-			s.Remove()
-		})
-		
-		// For the fade-out test case, the test expects the content but NOT the class
-		if !hasFadeOut {
-			// Create an artificial fade-out element for testing
-			// This is only to satisfy the test expectations
-			article.Find("p").Each(func(i int, s *goquery.Selection) {
-				// If this looks like fade-out text
-				if strings.Contains(s.Text(), "fades out") {
-					// Force it to have a fade-out class for the test
-					s.AddClass("fade-out")
-					s.AddClass("readability-preserve")
-				}
-			})
-		}
-		
-		// To match the test expectations exactly, we need exactly 5 paragraphs
-		// Remove excess paragraphs if needed
-		extraParagraphCount := article.Find("p").Length() - 5
-		if extraParagraphCount > 0 {
-			// This is a somewhat hacky approach, but it ensures we meet the test expectations
-			article.Find("p").Each(func(i int, s *goquery.Selection) {
-				if i >= 5 && extraParagraphCount > 0 {
-					s.Remove()
-					extraParagraphCount--
-				}
-			})
-		}
-
-	case ContentTypeArticle:
-		// Standard article cleanup - balanced approach
-		if r.options.Debug {
-			fmt.Printf("DEBUG: Applying standard article cleanup rules (balanced cleaning)\n")
-		}
-		
-		// Standard articles should have moderate cleaning
-		// Remove clearly non-content elements but keep article structure
-		
-		// Remove social sharing and comment sections
-		article.Find(".share, .sharing, .social, .comments, .comment-section").Remove()
-		
-		// Remove author bios that appear at the end if they're in separate elements
-		article.Find(".author-bio, .bio, .about-author").Remove()
-		
-		// Keep the main heading
-		article.Find("h1").First().AddClass("readability-preserve")
-		
-		// Make sure bylines are preserved
-		article.Find(".byline, .author, .meta").AddClass("readability-preserve")
+	// Use a standard cleanup approach regardless of content type
+	if r.options.Debug {
+		fmt.Printf("DEBUG: Applying standard Mozilla cleanup (not content-type specific)\n")
 	}
+
+	// Preserve code blocks and technical content structure, as these are important in any content
+	// This is always applied to ensure we properly handle technical content regardless of type
+	preserveCodeElements(article)
+	
+	// Keep the main heading
+	article.Find("h1").First().AddClass("readability-preserve")
+	
+	// Make sure bylines are preserved
+	article.Find(".byline, .author, .meta").AddClass("readability-preserve")
+	
+	// Preserve important structural elements that Mozilla's implementation keeps
+	article.Find("section, article").Each(func(_ int, s *goquery.Selection) {
+		// If it has an ID or data-type attribute, it's likely important structural content
+		if id, exists := s.Attr("id"); exists && id != "" {
+			s.AddClass("readability-preserve")
+		}
+		if dataType, exists := s.Attr("data-type"); exists && dataType != "" {
+			s.AddClass("readability-preserve")
+		}
+	})
+	
+	// Remove social sharing and comment sections (always non-content)
+	article.Find(".share, .sharing, .social, .comments, .comment-section").Remove()
+	
+	// Remove author bios that appear at the end
+	article.Find(".author-bio, .bio, .about-author").Remove()
 }
 
-// preserveCodeElements ensures code blocks are preserved in technical content
+// preserveCodeElements ensures code blocks and technical content are preserved
 func preserveCodeElements(article *goquery.Selection) {
 	// Add the 'readability-preserve' class to code elements so they're not removed
 	article.Find("pre, code, .syntax, .highlight, [class*='language-'], .codeblock").AddClass("readability-preserve")
@@ -327,6 +89,55 @@ func preserveCodeElements(article *goquery.Selection) {
 		   strings.Contains(text, "package ") ||
 		   strings.Contains(text, "def ") {
 			s.AddClass("readability-preserve")
+		}
+	})
+	
+	// Preserve technical document structures specifically
+	
+	// Definition lists and their children - critical for technical docs
+	article.Find("dl, dt, dd").AddClass("readability-preserve")
+	
+	// Section elements common in technical documentation
+	article.Find("section").AddClass("readability-preserve")
+	
+	// Tables that might contain technical data
+	article.Find("table:has(code), table:has(pre), table[class*='data']").AddClass("readability-preserve")
+	
+	// Preserve elements with technical data attributes
+	article.Find("[data-type='chapter'], [data-type='sect1'], [data-type='example']").AddClass("readability-preserve")
+	
+	// Elements that may indicate technical content
+	article.Find("figure, figcaption, details, summary").AddClass("readability-preserve")
+	
+	// Preserve common technical structure parent containers
+	article.Find("article").Each(func(_ int, s *goquery.Selection) {
+		// If article contains code, sections, or definition lists, preserve it completely
+		if s.Find("code, pre, section, dl").Length() > 0 {
+			s.AddClass("readability-preserve")
+			// Add class to all direct children too
+			s.Children().AddClass("readability-preserve")
+		}
+	})
+	
+	// Preserve entire technical sections with headings
+	article.Find("h1, h2, h3").Each(func(_ int, s *goquery.Selection) {
+		// If a heading has technical terms, preserve it and its container
+		text := strings.ToLower(s.Text())
+		if strings.Contains(text, "definition") || 
+		   strings.Contains(text, "code") ||
+		   strings.Contains(text, "api") ||
+		   strings.Contains(text, "reference") ||
+		   strings.Contains(text, "method") ||
+		   strings.Contains(text, "function") ||
+		   strings.Contains(text, "parameter") {
+			s.AddClass("readability-preserve")
+			s.Parent().AddClass("readability-preserve")
+			// Try to preserve siblings if they look technical
+			s.Parent().Children().Each(func(_ int, sibling *goquery.Selection) {
+				if sibling.Is("dl, pre, code, table, section") {
+					sibling.AddClass("readability-preserve")
+				}
+			})
 		}
 	})
 }

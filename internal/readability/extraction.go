@@ -151,9 +151,10 @@ func (r *Readability) grabArticle() *goquery.Selection {
 			
 			// Check for error/not found page patterns
 			isError := strings.Contains(strings.ToLower(titleText), "not found") || 
-					   strings.Contains(strings.ToLower(titleText), "error") ||
+					   strings.Contains(strings.ToLower(titleText), "error page") ||
 					   strings.Contains(strings.ToLower(bodyText), "page not found") ||
-					   strings.Contains(strings.ToLower(bodyText), "404")
+					   strings.Contains(strings.ToLower(bodyText), "404 error") ||
+					   strings.Contains(strings.ToLower(bodyText), "error 404")
 					   
 			// For real-world examples in tests, we need to handle error pages specially
 			if isError {
