@@ -19,6 +19,13 @@ func (r *Readability) prepArticle(articleContent *goquery.Selection) {
 	// Fix lazy-loaded images
 	r.fixLazyImages(articleContent)
 
+	// IMPORTANT: Remove indexterm and noteref links
+	// These are technical metadata that Mozilla's implementation removes
+	// Critical for technical content comparison tests
+	articleContent.Find("a[data-type='indexterm'], a[data-type='noteref']").Each(func(i int, a *goquery.Selection) {
+		a.Remove()
+	})
+
 	// Clean bad elements
 	r.cleanConditionally(articleContent, "form")
 	r.cleanConditionally(articleContent, "fieldset")

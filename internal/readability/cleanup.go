@@ -406,7 +406,7 @@ func (r *Readability) calculateNodeMetrics(node *goquery.Selection) NodeMetrics 
 	// Count various element types
 	metrics.paragraphCount = node.Find("p").Length()
 	metrics.imgCount = node.Find("img").Length()
-	metrics.liCount = node.Find("li").Length() // Don't artificially discount list items
+	metrics.liCount = node.Find("li").Length() - 100 // Subtract 100 from list item count exactly as Mozilla does
 	metrics.inputCount = node.Find("input").Length()
 	
 	// Count headings and their text ratio
@@ -454,6 +454,12 @@ func (r *Readability) hasNonLinkListContent(node *goquery.Selection) bool {
 		// Count link text
 		linkText := 0
 		li.Find("a").Each(func(i int, a *goquery.Selection) {
+			// Skip indexterm and noteref links which are just metadata and not real links
+			// This matches Mozilla's behavior which doesn't count these in link density
+			if dataType, exists := a.Attr("data-type"); exists && (dataType == "indexterm" || dataType == "noteref") {
+				return
+			}
+			
 			linkText += len(getInnerText(a, true))
 		})
 		totalLinks += linkText

@@ -81,13 +81,13 @@ const (
 	TitleSimilarityThreshold = 0.75
 
 	// ListLinkDensityThreshold is the maximum ratio of link text to total text for lists to be considered content
-	ListLinkDensityThreshold = 0.7 // Less aggressive to preserve more lists
+	ListLinkDensityThreshold = 0.5 // Exactly matching Mozilla's threshold
 
 	// ConditionalLinkDensityThresholdLow is link density threshold for nodes with low weight
-	ConditionalLinkDensityThresholdLow = 0.3 // Less aggressive
+	ConditionalLinkDensityThresholdLow = 0.2 // Exactly matching Mozilla's threshold
 
 	// ConditionalLinkDensityThresholdHigh is link density threshold for nodes with high weight
-	ConditionalLinkDensityThresholdHigh = 0.6 // Less aggressive
+	ConditionalLinkDensityThresholdHigh = 0.5 // Exactly matching Mozilla's threshold
 
 	// ConditionalWeightThresholdLow is the low weight threshold for conditional cleaning
 	ConditionalWeightThresholdLow = 25

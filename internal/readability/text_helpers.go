@@ -1,99 +1,111 @@
+// Package readability provides a pure Go implementation of Mozilla's Readability.js
+// for extracting the main content from web pages.
 package readability
 
 import (
-	"crypto/sha256"
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
-	"golang.org/x/net/html"
 )
 
-// getInnerText gets the inner text of a node with optional whitespace normalization
-// Uses a cache to avoid repeated normalization of the same text
-func getInnerText(s *goquery.Selection, normalizeSpaces bool) string {
+// getInnerText extracts text from a node, optionally normalizing whitespace
+func getInnerText(s *goquery.Selection, normalize bool) string {
 	if s == nil || s.Length() == 0 {
 		return ""
 	}
 
-	// Most efficient path for non-normalized text
-	if !normalizeSpaces {
-		return strings.TrimSpace(s.Text())
-	}
-	
-	// Get the raw text first
-	text := strings.TrimSpace(s.Text())
-	
-	// Empty strings don't need normalization
-	if text == "" {
-		return text
-	}
-	
-	// Apply normalization (replaced multiple spaces with a single space)
-	// Use a faster implementation than regexp for this common operation
-	var sb strings.Builder
-	sb.Grow(len(text)) // Pre-allocate for efficiency
-	
-	// Track if we're in a whitespace sequence
-	inWhitespace := false
-	
-	for _, r := range text {
-		isSpace := unicode.IsSpace(r)
-		
-		if isSpace {
-			// If this is the first whitespace char we've seen, add a single space
-			if !inWhitespace {
-				sb.WriteRune(' ')
-				inWhitespace = true
-			}
-			// Otherwise skip it (multiple spaces become one)
-		} else {
-			// Regular character, just add it
-			sb.WriteRune(r)
-			inWhitespace = false
-		}
-	}
-	
-	return sb.String()
-}
-
-// getNodeText gets the text content of an HTML node
-func getNodeText(node *html.Node) string {
-	if node == nil {
-		return ""
-	}
-
-	// Use a string builder for efficient concatenation
-	var sb strings.Builder
-	
-	// Helper function to extract text from node tree, avoids multiple function calls
-	var extractText func(*html.Node)
-	extractText = func(n *html.Node) {
-		if n == nil {
-			return
-		}
-		
-		if n.Type == TextNode {
-			sb.WriteString(n.Data)
-		} else {
-			// Recursively process children
-			for child := n.FirstChild; child != nil; child = child.NextSibling {
-				extractText(child)
+	var text string
+	// Optimized approach: get all text nodes and concatenate them
+	// This is much faster than calling .Text() which also does normalization
+	s.Contents().Each(func(i int, el *goquery.Selection) {
+		if el.Get(0) != nil {
+			switch el.Get(0).Type {
+			case TextNode:
+				text += el.Text()
+			case ElementNode:
+				// Handle inline elements that might contain text
+				if isPhrasingContent(el.Get(0)) {
+					text += getInnerText(el, false)
+				} else {
+					// For block elements, add space around them
+					text += " " + getInnerText(el, false) + " "
+				}
 			}
 		}
+	})
+
+	if normalize {
+		// Replace all whitespace (newlines, tabs, etc.) with a single space
+		re := regexp.MustCompile(`\s+`)
+		text = re.ReplaceAllString(text, " ")
+		// Trim leading and trailing whitespace
+		text = strings.TrimSpace(text)
 	}
-	
-	// Extract all text from the node tree
-	extractText(node)
-	
-	// Return trimmed result
-	return strings.TrimSpace(sb.String())
+
+	return text
 }
 
-// getCharCount counts occurrences of a delimiter in the text
+// getText is a legacy wrapper around getInnerText for backwards compatibility
+func getText(s *goquery.Selection, normalize bool) string {
+	return getInnerText(s, normalize)
+}
+
+// textSimilarity measures similarity between two strings
+func textSimilarity(textA, textB string) float64 {
+	if textA == textB {
+		return 1.0
+	}
+	
+	if textA == "" || textB == "" {
+		return 0.0
+	}
+	
+	textA = strings.ToLower(textA)
+	textB = strings.ToLower(textB)
+	
+	// Tokenize: split by any non-word characters and filter out empty tokens
+	tokenizeAndFilter := func(text string) []string {
+		tokens := RegexpTokenize.Split(text, -1)
+		filtered := []string{}
+		for _, token := range tokens {
+			token = strings.TrimSpace(token)
+			if token != "" {
+				filtered = append(filtered, token)
+			}
+		}
+		return filtered
+	}
+	
+	tokensA := tokenizeAndFilter(textA)
+	tokensB := tokenizeAndFilter(textB)
+	
+	// Count matching tokens
+	matches := 0
+	for _, tokenA := range tokensA {
+		for _, tokenB := range tokensB {
+			if tokenA == tokenB {
+				matches++
+				break
+			}
+		}
+	}
+	
+	// Calculate Jaccard similarity (size of intersection / size of union)
+	lenA := len(tokensA)
+	lenB := len(tokensB)
+	
+	if lenA == 0 || lenB == 0 {
+		return 0.0
+	}
+	
+	// Return (matches / (lenA + lenB - matches)) to get similarity score
+	return float64(matches) / float64(lenA+lenB-matches)
+}
+
+// getCharCount counts occurrences of a specific character in a node's text
 func getCharCount(s *goquery.Selection, delimiter string) int {
 	if s == nil || s.Length() == 0 {
 		return 0
@@ -126,6 +138,12 @@ func getLinkDensity(s *goquery.Selection) float64 {
 	// Calculate total link text length in one pass
 	var linkLength int
 	s.Find("a").Each(func(i int, link *goquery.Selection) {
+		// Skip indexterm and noteref links which are just metadata and not real links
+		// This matches Mozilla's behavior which doesn't count these in link density
+		if dataType, exists := link.Attr("data-type"); exists && (dataType == "indexterm" || dataType == "noteref") {
+			return
+		}
+		
 		href, exists := link.Attr("href")
 		
 		// Apply coefficient for hash links (internal page links)
@@ -142,252 +160,231 @@ func getLinkDensity(s *goquery.Selection) float64 {
 	return float64(linkLength) / float64(textLength)
 }
 
-// getClassWeight calculates the content score based on class and ID attributes
-func getClassWeight(s *goquery.Selection) int {
-	if s == nil || s.Length() == 0 {
-		return 0
+// extractMeta extracts metadata from document meta tags
+func extractMeta(doc *goquery.Document, field, defaultValue string) string {
+	// Metadata naming variations to check for the given field
+	// This handles common variations of metadata naming across websites
+	metaFieldVariations := map[string][]string{
+		"author": {
+			"author", "byline", "dc.creator", "article:author", "creator", "og:article:author",
+		},
+		"date": {
+			"date", "created", "article:published_time", "article:modified_time", 
+			"publication_date", "sailthru.date", "timestamp", "dc.date", "og:published_time",
+			"og:updated_time", "publication-date", "modified-date", "last-modified",
+		},
+		"sitename": {
+			"og:site_name", "application-name", "site_name", "publisher", "dc.publisher", "copyright",
+		},
+		"description": {
+			"description", "og:description", "dc.description", "twitter:description",
+		},
+		"title": {
+			"title", "og:title", "dc.title", "twitter:title",
+		},
 	}
 
-	weight := 0
+	// Get the variations to check for this field
+	variations, ok := metaFieldVariations[field]
+	if !ok {
+		// If no variations defined, just check the field as-is
+		variations = []string{field}
+	}
 
-	// Check for content-related class
-	class, exists := s.Attr("class")
-	if exists && class != "" {
-		if RegexpNegative.MatchString(class) {
-			weight -= 25
+	// Try each variation, checking multiple meta tag syntaxes for each
+	for _, variation := range variations {
+		// Check standard "name" attribute
+		if value := doc.Find(fmt.Sprintf("meta[name='%s']", variation)).AttrOr("content", ""); value != "" {
+			return strings.TrimSpace(value)
 		}
-		if RegexpPositive.MatchString(class) {
-			weight += 25
+
+		// Check "property" attribute (common for OpenGraph)
+		if value := doc.Find(fmt.Sprintf("meta[property='%s']", variation)).AttrOr("content", ""); value != "" {
+			return strings.TrimSpace(value)
 		}
-	}
 
-	// Check for content-related ID
-	id, exists := s.Attr("id")
-	if exists && id != "" {
-		if RegexpNegative.MatchString(id) {
-			weight -= 25
+		// Check "itemprop" attribute (common for schema.org)
+		if value := doc.Find(fmt.Sprintf("meta[itemprop='%s']", variation)).AttrOr("content", ""); value != "" {
+			return strings.TrimSpace(value)
 		}
-		if RegexpPositive.MatchString(id) {
-			weight += 25
-		}
-	}
 
-	return weight
-}
-
-// textSimilarity compares two texts and returns a similarity score
-func textSimilarity(textA, textB string) float64 {
-	if textA == "" || textB == "" {
-		return 0
-	}
-
-	// Quick path for identical texts
-	if textA == textB {
-		return 1.0
-	}
-
-	// Tokenize both texts - use a more efficient approach with a single function
-	tokenizeFunc := func(text string) map[string]struct{} {
-		text = strings.ToLower(text)
-		tokens := make(map[string]struct{})
-		
-		start := -1
-		for i, r := range text {
-			// If it's a letter or digit, mark start of token if needed
-			if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-				if start < 0 {
-					start = i
-				}
-			} else if start >= 0 {
-				// End of a token
-				tokens[text[start:i]] = struct{}{}
-				start = -1
+		// Special case for Twitter cards
+		if strings.HasPrefix(variation, "twitter:") {
+			if value := doc.Find(fmt.Sprintf("meta[name='%s']", variation)).AttrOr("value", ""); value != "" {
+				return strings.TrimSpace(value)
 			}
 		}
-		
-		// Handle case where token goes to end of string
-		if start >= 0 {
-			tokens[text[start:]] = struct{}{}
-		}
-		
-		return tokens
 	}
-	
-	// Create token sets for both texts
-	tokensA := tokenizeFunc(textA)
-	tokensB := tokenizeFunc(textB)
-	
-	if len(tokensA) == 0 || len(tokensB) == 0 {
-		return 0
-	}
-	
-	// Count common tokens and total tokens in B
-	commonTokens := 0
-	for token := range tokensB {
-		if _, exists := tokensA[token]; exists {
-			commonTokens++
+
+	// If we're looking for title and didn't find it in meta tags, check the <title> element
+	if field == "title" {
+		if title := doc.Find("title").Text(); title != "" {
+			return strings.TrimSpace(title)
 		}
 	}
-	
-	// Calculate similarity as the ratio of common tokens to total tokens in B
-	return float64(commonTokens) / float64(len(tokensB))
+
+	// If no match found, return default value
+	return defaultValue
 }
 
-// isValidByline checks if a string could be a byline
+// getTextDensity calculates the ratio of text content to total elements
+func getTextDensity(s *goquery.Selection, tagNames []string) float64 {
+	if s == nil || s.Length() == 0 || len(tagNames) == 0 {
+		return 0
+	}
+
+	// Get all text
+	text := getInnerText(s, true)
+	textLength := len(text)
+	if textLength == 0 {
+		return 0
+	}
+
+	// Count tag text
+	tagTextLength := 0
+	for _, tag := range tagNames {
+		s.Find(tag).Each(func(i int, el *goquery.Selection) {
+			tagTextLength += len(getInnerText(el, true))
+		})
+	}
+
+	// If no tags found
+	if tagTextLength == 0 {
+		return 0
+	}
+
+	return float64(tagTextLength) / float64(textLength)
+}
+
+// getNormalized returns a normalized string with whitespace trimmed
+func getNormalized(text string) string {
+	return strings.TrimSpace(RegexpNormalize.ReplaceAllString(text, " "))
+}
+
+// isValidByline checks if a string looks like a byline
 func isValidByline(text string) bool {
-	text = strings.TrimSpace(text)
-	return text != "" && len(text) < 100
-}
-
-// wordCount counts the number of words in a string
-func wordCount(text string) int {
-	return len(strings.Fields(text))
-}
-
-// unescapeHtmlEntities converts HTML entities to their corresponding characters
-func unescapeHtmlEntities(text string) string {
-	if text == "" {
-		return text
+	// Must be short, have at least one character
+	if len(text) == 0 || len(text) > 100 {
+		return false
 	}
 
-	// Basic HTML entities
-	result := regexp.MustCompile(`&(quot|amp|apos|lt|gt);`).ReplaceAllStringFunc(text, func(match string) string {
-		entity := match[1 : len(match)-1]
-		if val, ok := HTMLEscapeMap[entity]; ok {
-			return val
-		}
-		return match
-	})
-
-	// Numeric entities (&#123; format)
-	result = regexp.MustCompile(`&#(?:x([0-9a-f]{1,4})|([0-9]{1,4}));`).ReplaceAllStringFunc(result, func(match string) string {
-		if strings.HasPrefix(match, "&#x") {
-			// Hex format &#x123;
-			hexStr := match[3 : len(match)-1]
-			intVal, err := strconv.ParseInt(hexStr, 16, 32)
-			if err != nil {
-				return match
+	// Check for indicators of a date-only string
+	for _, indicator := range []string{"/", "•", "·", "|", "-", "—"} {
+		if strings.Contains(text, indicator) {
+			// May be a date divider; check if text is mostly numeric
+			numericCount := 0
+			for _, r := range text {
+				if unicode.IsDigit(r) {
+					numericCount++
+				}
 			}
-			return string(rune(intVal))
-		} else {
-			// Decimal format &#123;
-			decStr := match[2 : len(match)-1]
-			intVal, err := strconv.Atoi(decStr)
-			if err != nil {
-				return match
+			if float64(numericCount)/float64(len(text)) > 0.3 {
+				return false // Too many digits for a byline
 			}
-			return string(rune(intVal))
-		}
-	})
-
-	return result
-}
-
-// isWhitespace checks if a node is whitespace
-func isWhitespace(node *html.Node) bool {
-	if node == nil {
-		return true
-	}
-
-	// If it's a text node, check if it's only whitespace
-	if node.Type == TextNode {
-		return RegexpWhitespace.MatchString(node.Data)
-	}
-
-	// Check if it's a BR element
-	return strings.ToUpper(node.Data) == "BR"
-}
-
-// generateHash creates a SHA-256 hash for text
-func generateHash(text string) string {
-	hash := sha256.New()
-	hash.Write([]byte(text))
-	return fmt.Sprintf("%x", hash.Sum(nil))
-}
-
-// getOuterHTML gets the outer HTML of a selection
-func getOuterHTML(s *goquery.Selection) string {
-	if s == nil || s.Length() == 0 {
-		return ""
-	}
-	html, err := goquery.OuterHtml(s)
-	if err != nil {
-		return ""
-	}
-	return html
-}
-
-// getNodeName returns the tag name of a selection
-func getNodeName(s *goquery.Selection) string {
-	if s == nil || s.Length() == 0 {
-		return ""
-	}
-	node := s.Get(0)
-	if node == nil {
-		return ""
-	}
-	// For text nodes or non-element nodes, provide a meaningful return
-	if node.Type != html.ElementNode {
-		if node.Type == html.TextNode {
-			return "#text"
-		}
-		// Map the node type to a string representation
-		switch node.Type {
-		case html.CommentNode:
-			return "#comment"
-		case html.DoctypeNode:
-			return "#doctype"
-		default:
-			return fmt.Sprintf("#node%d", node.Type)
 		}
 	}
-	return strings.ToUpper(node.Data)
+
+	return true
 }
 
-// nodeToString returns a string representation of a node for debugging
-// Note: This function is only used for debugging and isn't in hot paths
-func nodeToString(node *html.Node) string {
-	if node == nil {
-		return "nil"
-	}
-
-	// Use a string builder for more efficient string construction
-	var sb strings.Builder
-
-	if node.Type == TextNode {
-		// Handle text nodes - limit to 20 chars for brevity
-		text := strings.TrimSpace(node.Data)
-		sb.WriteString("TextNode (\"")
-		if len(text) > 20 {
-			sb.WriteString(text[:20])
-			sb.WriteString("...")
-		} else {
-			sb.WriteString(text)
+// checkAdjacentForByline checks elements adjacent to node for byline data
+func checkAdjacentForByline(node *goquery.Selection) string {
+	// If the node has siblings, check if one might be a byline
+	if node != nil && node.Nodes != nil && len(node.Nodes) > 0 {
+		if prevSibling := node.Prev(); prevSibling.Length() > 0 {
+			// Check if previous sibling has byline indicators
+			if prevSibling.HasClass("byline") || RegexpByline.MatchString(prevSibling.AttrOr("class", "")) {
+				byline := getInnerText(prevSibling, true)
+				if isValidByline(byline) {
+					return byline
+				}
+			}
 		}
-		sb.WriteString("\")")
-		return sb.String()
+
+		if nextSibling := node.Next(); nextSibling.Length() > 0 {
+			// Check if next sibling has byline indicators
+			if nextSibling.HasClass("byline") || RegexpByline.MatchString(nextSibling.AttrOr("class", "")) {
+				byline := getInnerText(nextSibling, true)
+				if isValidByline(byline) {
+					return byline
+				}
+			}
+		}
 	}
 
-	// For element nodes, construct a representation with attributes
-	sb.WriteByte('<')
-	sb.WriteString(strings.ToLower(node.Data))
+	return ""
+}
+
+// getRootDocumentTitle creates an estimated document title
+func getRootDocumentTitle(doc *goquery.Document) string {
+	if doc == nil {
+		return ""
+	}
+
+	// First try the <title> element
+	title := doc.Find("title").Text()
+	title = strings.TrimSpace(title)
 	
-	// Only add a space if there are attributes
-	if len(node.Attr) > 0 {
-		sb.WriteByte(' ')
+	// If no title, check for meta title
+	if title == "" {
+		title = extractMeta(doc, "title", "")
 	}
 	
-	// Add all attributes
-	for i, attr := range node.Attr {
-		if i > 0 {
-			sb.WriteByte(' ')
-		}
-		sb.WriteString(attr.Key)
-		sb.WriteString("=\"")
-		sb.WriteString(attr.Val)
-		sb.WriteByte('"')
+	// Fallback to document URL if we have it
+	if title == "" {
+		// Get URL from base tag, if present
+		doc.Find("base").Each(func(i int, s *goquery.Selection) {
+			if baseUrl, exists := s.Attr("href"); exists && baseUrl != "" {
+				// Extract title from URL as a last resort
+				parts := strings.Split(baseUrl, "/")
+				if len(parts) > 0 {
+					lastPart := parts[len(parts)-1]
+					// Remove file extension
+					if idx := strings.LastIndex(lastPart, "."); idx > 0 {
+						lastPart = lastPart[:idx]
+					}
+					// Convert dashes to spaces
+					lastPart = strings.ReplaceAll(lastPart, "-", " ")
+					lastPart = strings.ReplaceAll(lastPart, "_", " ")
+					title = strings.Title(lastPart)
+				}
+			}
+		})
 	}
 	
-	sb.WriteByte('>')
-	return sb.String()
+	return title
+}
+
+// cleanTitle cleans and formats article title
+func cleanTitle(title string) string {
+	// Normalize whitespace
+	title = getNormalized(title)
+	
+	// If there's no title, return empty string
+	if title == "" {
+		return ""
+	}
+	
+	// Look for separators to identify site name
+	separators := []string{" | ", " - ", " :: ", " / ", " » "}
+	
+	for _, separator := range separators {
+		if parts := strings.Split(title, separator); len(parts) > 1 {
+			// Check if the last part is the site name
+			// Site names are typically short
+			if len(parts[len(parts)-1]) < 10 {
+				// Return all parts except the last one
+				return strings.TrimSpace(strings.Join(parts[:len(parts)-1], separator))
+			}
+			
+			// Check if the first part is the site name
+			if len(parts[0]) < 10 {
+				// Return all parts except the first one
+				return strings.TrimSpace(strings.Join(parts[1:], separator))
+			}
+		}
+	}
+	
+	// If no separator found or complex patterns, return as-is
+	return title
 }
