@@ -57,30 +57,44 @@ func unescapeHtmlEntities(text string) string {
 }
 
 // getInnerText extracts text from a node, optionally normalizing whitespace
+// Performance optimized: uses strings.Builder to avoid repeated string concatenation
 func getInnerText(s *goquery.Selection, normalize bool) string {
 	if s == nil || s.Length() == 0 {
 		return ""
 	}
 
-	var text string
-	// Optimized approach: get all text nodes and concatenate them
-	// This is much faster than calling .Text() which also does normalization
+	// Use strings.Builder for efficient string concatenation
+	// This significantly improves performance for large documents
+	var builder strings.Builder
+
+	// Pre-allocate a reasonable buffer size to reduce allocations
+	// Average text node is ~100 bytes, estimate based on content count
+	contentCount := s.Contents().Length()
+	if contentCount > 0 {
+		builder.Grow(contentCount * 100)
+	}
+
+	// Extract text from all child nodes
 	s.Contents().Each(func(i int, el *goquery.Selection) {
 		if el.Get(0) != nil {
 			switch el.Get(0).Type {
 			case TextNode:
-				text += el.Text()
+				builder.WriteString(el.Text())
 			case ElementNode:
 				// Handle inline elements that might contain text
 				if isPhrasingContent(el.Get(0)) {
-					text += getInnerText(el, false)
+					builder.WriteString(getInnerText(el, false))
 				} else {
 					// For block elements, add space around them
-					text += " " + getInnerText(el, false) + " "
+					builder.WriteString(" ")
+					builder.WriteString(getInnerText(el, false))
+					builder.WriteString(" ")
 				}
 			}
 		}
 	})
+
+	text := builder.String()
 
 	if normalize {
 		// Replace all whitespace (newlines, tabs, etc.) with a single space

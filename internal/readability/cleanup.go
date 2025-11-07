@@ -350,63 +350,145 @@ func (r *Readability) shouldPreserveStructure(node *goquery.Selection, tag strin
 }
 
 // shouldRemoveNode evaluates if a node should be removed during conditional cleaning
+//
+// This is a critical decision function that implements Mozilla's Readability.js algorithm
+// for determining whether an element should be kept or removed from the extracted content.
+// It considers multiple factors:
+//
+//  1. Structure preservation - Keeps elements with important structural content (headings, links, etc.)
+//  2. Class weight - Elements with positive class/ID indicators (e.g., "article", "content") are favored
+//  3. Comma count - Elements with many commas likely contain substantial prose content
+//  4. Important links - Elements containing valuable navigation or reference links
+//  5. Content metrics - Paragraph count, image count, link density, heading density, etc.
+//  6. Special cases - Image galleries, embedded content, etc.
+//
+// The algorithm is designed to be conservative - when in doubt, it tends to keep content
+// rather than remove it, as false negatives (missing content) are worse than false positives
+// (extra clutter).
+//
+// Parameters:
+//   - node: The goquery selection to evaluate
+//   - tag: The lowercase tag name of the element
+//
+// Returns:
+//   - true if the node should be removed, false if it should be kept
 func (r *Readability) shouldRemoveNode(node *goquery.Selection, tag string) bool {
 	// Check for structure preservation first
+	// This catches headings, lists with content, and other structural elements
 	if r.shouldPreserveStructure(node, tag) {
 		return false // Keep important structural elements
 	}
-	
-	// Calculate weight
+
+	// Calculate weight based on class and ID attributes
+	// Negative patterns (ads, sidebar) decrease weight, positive patterns (article, content) increase it
 	weight := getClassWeight(node)
-	
-	// Check if it has enough commas
+
+	// Check if it has enough commas (MinCommaCount = 10 from Mozilla's algorithm)
+	// High comma count indicates paragraph-rich content
 	if getCharCount(node, ",") >= MinCommaCount {
 		return false // Keep nodes with many commas
 	}
-	
+
 	// Check for important link that should be preserved
+	// Important links include those with "more information", "read more", etc.
 	if r.hasImportantLinks(node) {
 		return false
 	}
-	
-	// Get node metrics
+
+	// Get node metrics (paragraph count, image count, link density, etc.)
 	metrics := r.calculateNodeMetrics(node)
-	
-	// Decision logic for removing the node
+
+	// Decision logic for removing the node based on Mozilla's algorithm
+	// This considers the balance between content (paragraphs, text) and clutter (links, forms)
 	shouldRemove := r.evaluateRemovalCriteria(node, tag, weight, metrics)
-	
+
 	// Special case for image galleries in lists
+	// If a list has one image per list item, it's likely a photo gallery
 	if shouldRemove && (tag == "ul" || tag == "ol") && !metrics.hasListContent {
 		// Check for image gallery (one image per list item)
 		if metrics.imgCount == metrics.liCount {
 			return false // Keep image galleries
 		}
 	}
-	
+
 	return shouldRemove
 }
 
 // NodeMetrics holds metrics used to evaluate if a node should be kept or removed
+//
+// These metrics are used by Mozilla's Readability.js algorithm to make informed decisions
+// about content quality. The metrics help distinguish between valuable content and clutter.
 type NodeMetrics struct {
-	paragraphCount   int
-	imgCount         int
-	liCount          int
-	inputCount       int
-	headingDensity   float64
-	linkDensity      float64
-	embedCount       int
-	contentLength    int
-	hasListContent   bool
+	// paragraphCount is the number of <p> tags in the node
+	// Higher paragraph counts suggest article content
+	paragraphCount int
+
+	// imgCount is the number of <img> tags in the node
+	// Used to identify image galleries and visual content
+	imgCount int
+
+	// liCount is the number of <li> tags minus 100 (Mozilla's algorithm)
+	// Subtracting 100 prevents overly aggressive removal of list-heavy content
+	// Negative values indicate very few list items
+	liCount int
+
+	// inputCount is the number of <input> tags in the node
+	// High input counts suggest forms rather than article content
+	inputCount int
+
+	// headingDensity is the ratio of heading text to total text (0.0 to 1.0)
+	// Very high heading density (>0.3) might indicate navigation or TOC rather than content
+	headingDensity float64
+
+	// linkDensity is the ratio of link text to total text (0.0 to 1.0)
+	// High link density (>0.5) suggests navigation, related links, or ads
+	linkDensity float64
+
+	// embedCount is the number of embedded objects (excluding allowed videos)
+	// Includes <object>, <embed>, and <iframe> tags
+	embedCount int
+
+	// contentLength is the total character count of text content
+	// Used to determine if a node has sufficient content to be valuable
+	contentLength int
+
+	// hasListContent indicates if a list contains actual content vs just links
+	// True if list items have substantial text beyond just links
+	hasListContent bool
 }
 
 // calculateNodeMetrics computes various metrics used to evaluate node content quality
+//
+// This function implements Mozilla's Readability.js metric calculation, gathering statistics
+// about a node's content to help determine if it should be kept or removed. The metrics
+// provide a quantitative basis for content quality assessment.
+//
+// Key behaviors:
+//   - Subtracts 100 from list item count (Mozilla's algorithm for list-heavy pages)
+//   - Calculates densities as ratios (0.0 to 1.0) for normalized comparison
+//   - Excludes allowed videos from embed count
+//   - Distinguishes between link-heavy lists and content-rich lists
+//
+// Parameters:
+//   - node: The goquery selection to analyze
+//
+// Returns:
+//   - NodeMetrics struct populated with calculated values
 func (r *Readability) calculateNodeMetrics(node *goquery.Selection) NodeMetrics {
 	metrics := NodeMetrics{}
-	
+
 	// Count various element types
 	metrics.paragraphCount = node.Find("p").Length()
 	metrics.imgCount = node.Find("img").Length()
-	metrics.liCount = node.Find("li").Length() - 100 // Subtract 100 from list item count exactly as Mozilla does
+
+	// Subtract 100 from list item count to match Mozilla's Readability.js algorithm
+	// This prevents overly aggressive removal of list-heavy content like:
+	// - Navigation menus with many items
+	// - Article lists on news sites
+	// - Directory listings
+	// By subtracting 100, only pages with massive numbers of list items (100+)
+	// will have positive liCount values that trigger special handling
+	metrics.liCount = node.Find("li").Length() - 100
 	metrics.inputCount = node.Find("input").Length()
 	
 	// Count headings and their text ratio
