@@ -8,6 +8,12 @@ import (
 )
 
 func TestDetectContentType(t *testing.T) {
+	// DEPRECATED: Content type detection has been removed to match Mozilla's unified algorithm.
+	// All content is now treated as ContentTypeArticle regardless of characteristics.
+	// This test is skipped as the functionality it tests no longer exists.
+	// See commit 577bc59: "Remove content type detection to match Mozilla's unified approach"
+	t.Skip("Content type detection has been deprecated in favor of Mozilla's unified algorithm")
+
 	tests := []struct {
 		name     string
 		html     string
@@ -241,6 +247,12 @@ func TestDetectContentType(t *testing.T) {
 }
 
 func TestContentTypeAwareExtraction(t *testing.T) {
+	// DEPRECATED: Content type-specific extraction has been removed to match Mozilla's unified algorithm.
+	// All content now uses the same extraction logic regardless of type.
+	// This test is skipped as the functionality it tests no longer exists.
+	// See commit 577bc59: "Remove content type detection to match Mozilla's unified approach"
+	t.Skip("Content type-specific extraction has been deprecated in favor of Mozilla's unified algorithm")
+
 	// This test verifies that our content type-specific extraction works correctly
 	// by checking that exactly the expected number of elements remain in the content.
 	// When this test fails, it usually means our cleanup functions need to be adjusted

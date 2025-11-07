@@ -7,6 +7,65 @@ import (
 	"golang.org/x/net/html"
 )
 
+// getNodeName returns the uppercase tag name of a selection
+func getNodeName(s *goquery.Selection) string {
+	if s == nil || s.Length() == 0 {
+		return ""
+	}
+	node := s.Get(0)
+	if node == nil {
+		return ""
+	}
+	return strings.ToUpper(node.Data)
+}
+
+// getOuterHTML returns the outer HTML string of a selection
+func getOuterHTML(s *goquery.Selection) string {
+	if s == nil || s.Length() == 0 {
+		return ""
+	}
+	html, err := goquery.OuterHtml(s)
+	if err != nil {
+		return ""
+	}
+	return html
+}
+
+// getClassWeight calculates a weight score based on class and ID attributes
+// Negative patterns (ads, sidebar, etc.) decrease the score
+// Positive patterns (article, content, etc.) increase the score
+func getClassWeight(s *goquery.Selection) int {
+	if s == nil || s.Length() == 0 {
+		return 0
+	}
+
+	weight := 0
+
+	// Check for content-related class
+	class, exists := s.Attr("class")
+	if exists && class != "" {
+		if RegexpNegative.MatchString(class) {
+			weight -= ClassWeightNegative
+		}
+		if RegexpPositive.MatchString(class) {
+			weight += ClassWeightPositive
+		}
+	}
+
+	// Check for content-related ID
+	id, exists := s.Attr("id")
+	if exists && id != "" {
+		if RegexpNegative.MatchString(id) {
+			weight -= ClassWeightNegative
+		}
+		if RegexpPositive.MatchString(id) {
+			weight += ClassWeightPositive
+		}
+	}
+
+	return weight
+}
+
 // isSameNode checks if two nodes are the same
 // This is a pointer comparison, so it only returns true if both arguments
 // reference exactly the same node in memory

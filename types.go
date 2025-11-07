@@ -2,7 +2,10 @@
 // for extracting the main content from HTML pages.
 package readabiligo
 
-import "time"
+import (
+	"runtime"
+	"time"
+)
 
 // Version information for the ReadabiliGo library.
 const (
@@ -115,6 +118,6 @@ func GetBuildInfo() BuildInfo {
 	return BuildInfo{
 		Version:   Version,
 		Name:      Name,
-		GoVersion: "go1.22", // TODO: Make this dynamic
+		GoVersion: runtime.Version(),
 	}
 }
