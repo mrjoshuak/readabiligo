@@ -347,11 +347,19 @@ func (r *Readability) prepareNodesForScoring(body *goquery.Selection) []*goquery
 			continue
 		}
 
-		// Handle deeply nested headings differently - we should prioritize them
+		// Enhancement: Handle deeply nested content with special care
+		// This is an intentional enhancement over Mozilla's Readability.js algorithm.
+		// Deeply nested content (5+ levels) is common in modern web applications and CMSs,
+		// and treating it the same as shallow content can result in important headings
+		// and structural elements being incorrectly removed.
+		//
+		// This enhancement prioritizes headings in deeply nested structures and is more
+		// lenient with unlikely candidate removal, improving extraction quality for
+		// complex modern web pages without negatively impacting standard articles.
 		nestingLevel := nestingLevels[node]
-		isHeading := nodeTagName == "H1" || nodeTagName == "H2" || nodeTagName == "H3" || 
+		isHeading := nodeTagName == "H1" || nodeTagName == "H2" || nodeTagName == "H3" ||
 		             nodeTagName == "H4" || nodeTagName == "H5" || nodeTagName == "H6"
-		
+
 		// For deeply nested headings, be more lenient with unlikely candidate removal
 		isDeeplyNested := nestingLevel >= 5
 		if isDeeplyNested && isHeading {

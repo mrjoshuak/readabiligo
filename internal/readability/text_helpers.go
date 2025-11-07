@@ -5,11 +5,56 @@ package readability
 import (
 	"fmt"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
 	"github.com/PuerkitoBio/goquery"
 )
+
+// wordCount counts the number of words in a string
+func wordCount(text string) int {
+	return len(strings.Fields(text))
+}
+
+// unescapeHtmlEntities converts HTML entities to their corresponding characters
+func unescapeHtmlEntities(text string) string {
+	if text == "" {
+		return text
+	}
+
+	// Basic HTML entities
+	result := regexp.MustCompile(`&(quot|amp|apos|lt|gt);`).ReplaceAllStringFunc(text, func(match string) string {
+		entity := match[1 : len(match)-1]
+		if val, ok := HTMLEscapeMap[entity]; ok {
+			return val
+		}
+		return match
+	})
+
+	// Numeric entities (&#123; format)
+	result = regexp.MustCompile(`&#(?:x([0-9a-f]{1,4})|([0-9]{1,4}));`).ReplaceAllStringFunc(result, func(match string) string {
+		if strings.HasPrefix(match, "&#x") {
+			// Hex format &#x123;
+			hexStr := match[3 : len(match)-1]
+			intVal, err := strconv.ParseInt(hexStr, 16, 32)
+			if err != nil {
+				return match
+			}
+			return string(rune(intVal))
+		} else {
+			// Decimal format &#123;
+			decStr := match[2 : len(match)-1]
+			intVal, err := strconv.Atoi(decStr)
+			if err != nil {
+				return match
+			}
+			return string(rune(intVal))
+		}
+	})
+
+	return result
+}
 
 // getInnerText extracts text from a node, optionally normalizing whitespace
 func getInnerText(s *goquery.Selection, normalize bool) string {
